@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Measurement Tool</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        canvas {
+            cursor: crosshair;
+            border-radius: 0.5rem;
+            background-color: #f0f0f0; /* So the canvas is visible before image load */
+        }
+        .drop-zone-active {
+            border-color: #2563eb;
+            background-color: #eff6ff;
+        }
+        .btn-active {
+            background-color: #1d4ed8;
+            color: white;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.5);
+        }
+        .info-panel {
+            max-height: calc(100vh - 12rem);
+            overflow-y: auto;
+        }
+        .grab { cursor: grab; }
+        .grabbing { cursor: grabbing; }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800 flex flex-col md:flex-row h-screen antialiased overflow-hidden">
+
+    <!-- Controls & Info Panel -->
+    <div class="w-full md:w-96 bg-white p-6 shadow-lg flex flex-col space-y-4 order-2 md:order-1">
+        <header>
+            <h1 class="text-2xl font-bold text-gray-900">Image Measurement Tool</h1>
+            <p class="text-sm text-gray-500 mt-1">Zoom, pan, and measure your images with precision.</p>
+        </header>
+
+        <div class="space-y-3">
+            <h2 class="text-lg font-semibold text-gray-700 border-b pb-2">Controls</h2>
+            <button id="set-reference-btn" class="w-full text-left bg-white hover:bg-gray-50 border border-gray-300 text-gray-700 font-semibold py-2 px-4 rounded-lg transition duration-150 ease-in-out">1. Set Reference Scale</button>
+            <button id="draw-measure-btn" class="w-full text-left bg-white hover:bg-gray-50 border border-gray-300 text-gray-700 font-semibold py-2 px-4 rounded-lg transition duration-150 ease-in-out" disabled>2. Draw Measurement Line</button>
+            <button id="edit-lines-btn" class="w-full text-left bg-white hover:bg-gray-50 border border-gray-300 text-gray-700 font-semibold py-2 px-4 rounded-lg transition duration-150 ease-in-out" disabled>3. Edit Lines</button>
+            <button id="set-home-btn" class="w-full text-left bg-white hover:bg-gray-50 border border-gray-300 text-gray-700 font-semibold py-2 px-4 rounded-lg transition duration-150 ease-in-out" disabled>4. Set Home Position</button>
+            <div class="flex items-center space-x-2">
+                <label class="flex-1">
+                    <span class="text-xs text-gray-500">Home X <span id="home-x-unit">(px)</span></span>
+                    <input type="number" id="home-x-input" placeholder="Home X" class="w-full px-2 py-1 border rounded-md text-sm" disabled>
+                </label>
+                 <label class="flex-1">
+                    <span class="text-xs text-gray-500">Home Y <span id="home-y-unit">(px)</span></span>
+                    <input type="number" id="home-y-input" placeholder="Home Y" class="w-full px-2 py-1 border rounded-md text-sm" disabled>
+                </label>
+                <button id="set-home-manual-btn" class="self-end px-3 py-1 bg-gray-200 hover:bg-gray-300 rounded-md text-sm font-semibold" disabled>Set</button>
+            </div>
+            <div class="flex items-center space-x-2 pt-2">
+                 <button id="save-btn" class="w-1/2 text-center bg-green-500 hover:bg-green-600 text-white font-semibold py-2 px-4 rounded-lg transition">Save Results</button>
+                 <button id="clear-btn" class="w-1/2 text-center bg-red-500 hover:bg-red-600 text-white font-semibold py-2 px-4 rounded-lg transition">Clear All</button>
+            </div>
+        </div>
+
+        <div id="info-panel" class="flex-grow space-y-4 pt-4 info-panel">
+            <h2 class="text-lg font-semibold text-gray-700 border-b pb-2">Information</h2>
+            <div id="status" class="text-sm bg-blue-100 border-l-4 border-blue-500 text-blue-700 p-3 rounded-r-lg">
+                Upload, paste, or drop an image to start.
+            </div>
+            <div id="measurements-container" class="space-y-3">
+                <!-- Measurement data will be injected here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content Area -->
+    <main class="flex-grow bg-gray-200 flex items-center justify-center p-4 md:p-8 order-1 md:order-2">
+        <div id="canvas-container" class="relative w-full h-full max-w-7xl max-h-[90vh] bg-white rounded-xl shadow-md flex items-center justify-center overflow-hidden">
+            <div id="drop-zone" class="w-full h-full border-4 border-dashed border-gray-300 rounded-xl flex flex-col items-center justify-center text-center p-8 transition duration-300">
+                <svg class="w-16 h-16 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                <h3 class="text-xl font-semibold text-gray-600">Drag & Drop Image Here</h3>
+                <p class="text-gray-500 mt-1">or</p>
+                <input type="file" id="file-input" class="hidden">
+                <label for="file-input" class="mt-2 cursor-pointer bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg transition">Select File</label>
+                <p class="text-gray-500 mt-2">You can also paste an image or image URL.</p>
+            </div>
+            <canvas id="canvas"></canvas>
+        </div>
+    </main>
+
+    <!-- Modal for reference length input -->
+    <div id="modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden items-center justify-center z-50">
+      <div class="relative mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+        <div class="mt-3 text-center">
+          <h3 class="text-lg leading-6 font-medium text-gray-900">Set Reference Length</h3>
+          <div class="mt-2 px-7 py-3 space-y-3">
+            <p class="text-sm text-gray-500">
+              Enter the known length of the line you just drew. This will set the scale for all other measurements.
+            </p>
+            <input type="number" id="reference-length-input" class="text-center w-full px-3 py-2 text-gray-700 border rounded-lg focus:outline-none focus:ring focus:border-blue-300" placeholder="e.g., 100">
+            <select id="reference-unit-select" class="w-full px-3 py-2 text-gray-700 border rounded-lg focus:outline-none focus:ring focus:border-blue-300">
+                <option value="mm">mm</option>
+                <option value="cm">cm</option>
+                <option value="in">in</option>
+                <option value="pixels">pixels</option>
+            </select>
+          </div>
+          <div class="items-center px-4 py-3">
+            <button id="modal-ok-btn" class="px-4 py-2 bg-blue-500 text-white text-base font-medium rounded-md w-full shadow-sm hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-300">
+              Set Scale
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // DOM Elements
+            const canvas = document.getElementById('canvas');
+            const ctx = canvas.getContext('2d');
+            const dropZone = document.getElementById('drop-zone');
+            const canvasContainer = document.getElementById('canvas-container');
+            const fileInput = document.getElementById('file-input');
+            const statusDiv = document.getElementById('status');
+            const measurementsContainer = document.getElementById('measurements-container');
+            const modal = document.getElementById('modal');
+            const modalOkBtn = document.getElementById('modal-ok-btn');
+            const referenceLengthInput = document.getElementById('reference-length-input');
+            const referenceUnitSelect = document.getElementById('reference-unit-select');
+            const homeXInput = document.getElementById('home-x-input');
+            const homeYInput = document.getElementById('home-y-input');
+            const homeXUnitSpan = document.getElementById('home-x-unit');
+            const homeYUnitSpan = document.getElementById('home-y-unit');
+
+            // Buttons
+            const setReferenceBtn = document.getElementById('set-reference-btn');
+            const drawMeasureBtn = document.getElementById('draw-measure-btn');
+            const editLinesBtn = document.getElementById('edit-lines-btn');
+            const setHomeBtn = document.getElementById('set-home-btn');
+            const setHomeManualBtn = document.getElementById('set-home-manual-btn');
+            const clearBtn = document.getElementById('clear-btn');
+            const saveBtn = document.getElementById('save-btn');
+            const controlButtons = [setReferenceBtn, drawMeasureBtn, setHomeBtn, editLinesBtn];
+
+            // State
+            let image = null;
+            let scale = null; // real units per pixel
+            let unit = 'pixels';
+            let referenceLine = { start: null, end: null, length: 0, pixelLength: 0 };
+            let measurements = [];
+            let homePosition = null;
+            let currentMode = 'idle';
+            let isDrawing = false;
+            let currentLineStart = null;
+            
+            // Zoom & Pan State
+            let transform = { scale: 1, panX: 0, panY: 0 };
+            let isPanning = false;
+            let panStart = { x: 0, y: 0 };
+
+            // Editing State
+            let selectedLine = null;
+            let selectedHandle = null; // 'start', 'end', or 'body'
+            let isDragging = false;
+            const HANDLE_RADIUS = 8;
+            
+            // --- Initialization & Event Listeners ---
+            
+            function init() {
+                resizeCanvas();
+                window.addEventListener('resize', resizeCanvas);
+                
+                // Image Loading
+                dropZone.addEventListener('dragover', (e) => { e.preventDefault(); e.stopPropagation(); dropZone.classList.add('drop-zone-active'); });
+                dropZone.addEventListener('dragleave', (e) => { e.preventDefault(); e.stopPropagation(); dropZone.classList.remove('drop-zone-active'); });
+                dropZone.addEventListener('drop', handleDrop);
+                fileInput.addEventListener('change', (e) => handleFiles(e.target.files));
+                document.addEventListener('paste', handlePaste);
+
+                // Canvas Mouse & Touch Events
+                canvas.addEventListener('mousedown', handleMouseDown);
+                canvas.addEventListener('mousemove', handleMouseMove);
+                canvas.addEventListener('mouseup', handleMouseUp);
+                canvas.addEventListener('mouseleave', handleMouseUp); // End action if mouse leaves
+                canvas.addEventListener('wheel', handleWheel);
+
+                // Keyboard
+                document.addEventListener('keydown', handleKeyDown);
+                document.addEventListener('keyup', handleKeyUp);
+
+                // Button Clicks
+                setReferenceBtn.addEventListener('click', () => setMode('drawing-reference'));
+                drawMeasureBtn.addEventListener('click', () => setMode('drawing-measure'));
+                editLinesBtn.addEventListener('click', () => setMode('editing'));
+                setHomeBtn.addEventListener('click', () => setMode('setting-home'));
+                setHomeManualBtn.addEventListener('click', handleSetHomeManually);
+                clearBtn.addEventListener('click', resetAll);
+                saveBtn.addEventListener('click', saveResults);
+
+                // Modal
+                modalOkBtn.addEventListener('click', handleSetScale);
+            }
+
+            function resizeCanvas() {
+                canvas.width = canvasContainer.clientWidth;
+                canvas.height = canvasContainer.clientHeight;
+                redrawCanvas();
+            }
+
+            // --- Mode Management ---
+
+            function setMode(mode) {
+                if (!image) return;
+                currentMode = mode;
+                selectedLine = null;
+                selectedHandle = null;
+                isDragging = false;
+                updateButtonStyles();
+                updateStatus();
+                redrawCanvas();
+            }
+
+            function updateButtonStyles() {
+                controlButtons.forEach(btn => btn.classList.remove('btn-active'));
+                if (currentMode === 'drawing-reference') setReferenceBtn.classList.add('btn-active');
+                if (currentMode === 'drawing-measure') drawMeasureBtn.classList.add('btn-active');
+                if (currentMode === 'setting-home') setHomeBtn.classList.add('btn-active');
+                if (currentMode === 'editing') editLinesBtn.classList.add('btn-active');
+            }
+
+            function updateStatus() {
+                switch (currentMode) {
+                    case 'drawing-reference': statusDiv.innerHTML = "<b>Mode:</b> Draw the reference line on a known length."; break;
+                    case 'drawing-measure': statusDiv.innerHTML = "<b>Mode:</b> Draw a line to measure it."; break;
+                    case 'editing': statusDiv.innerHTML = "<b>Mode:</b> Click to select a line. Drag handles to resize, or drag body to move."; break;
+                    case 'setting-home': statusDiv.innerHTML = "<b>Mode:</b> Click to set the (0,0) home position."; break;
+                    default: statusDiv.innerHTML = image ? "Image loaded. Select a mode to begin." : "Upload an image to start.";
+                }
+                 if(isPanning) statusDiv.innerHTML = "<b>Panning:</b> Hold SPACE and drag to move the view.";
+            }
+
+            // --- Image Handling ---
+            
+            function handleDrop(e) {
+                e.preventDefault(); e.stopPropagation();
+                dropZone.classList.remove('drop-zone-active');
+                handleFiles(e.dataTransfer.files);
+            }
+
+            function handlePaste(e) {
+                const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+                for (const item of items) {
+                    if (item.kind === 'file' && item.type.startsWith('image/')) {
+                        handleFiles([item.getAsFile()]);
+                        return;
+                    }
+                }
+                const text = (e.clipboardData || window.clipboardData).getData('text/plain');
+                if (text.match(/\.(jpeg|jpg|gif|png)$/) != null) {
+                    const proxyUrl = 'https://api.allorigins.win/raw?url=';
+                    loadImage(proxyUrl + encodeURIComponent(text));
+                }
+            }
+
+            function handleFiles(files) {
+                if (files && files.length > 0 && files[0].type.startsWith('image/')) {
+                    const reader = new FileReader();
+                    reader.onload = (e) => loadImage(e.target.result);
+                    reader.readAsDataURL(files[0]);
+                }
+            }
+
+            function loadImage(src) {
+                resetAll(true); // Soft reset
+                image = new Image();
+                image.crossOrigin = "Anonymous";
+                image.onload = () => {
+                    const canvasAspect = canvas.width / canvas.height;
+                    const imageAspect = image.width / image.height;
+                    let initialScale;
+                    if (imageAspect > canvasAspect) {
+                        initialScale = canvas.width / image.width;
+                    } else {
+                        initialScale = canvas.height / image.height;
+                    }
+                    transform.scale = initialScale * 0.95; 
+                    transform.panX = (canvas.width - image.width * transform.scale) / 2;
+                    transform.panY = (canvas.height - image.height * transform.scale) / 2;
+                    dropZone.classList.add('hidden');
+                    canvas.classList.remove('hidden');
+                    [drawMeasureBtn, setHomeBtn, editLinesBtn].forEach(b => b.disabled = false);
+                    setMode('drawing-reference');
+                    redrawCanvas();
+                };
+                image.src = src;
+            }
+
+            // --- Coordinate Transformation ---
+            
+            function getMousePos(e) {
+                const rect = canvas.getBoundingClientRect();
+                return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+            }
+
+            function screenToImageCoords(point) {
+                return {
+                    x: (point.x - transform.panX) / transform.scale,
+                    y: (point.y - transform.panY) / transform.scale
+                };
+            }
+
+            // --- Event Handlers ---
+
+            function handleKeyDown(e) {
+                if (e.code === 'Space' && !isPanning && image) {
+                    isPanning = true;
+                    canvas.classList.add('grab');
+                    updateStatus();
+                }
+            }
+
+            function handleKeyUp(e) {
+                if (e.code === 'Space') {
+                    isPanning = false;
+                    canvas.classList.remove('grab', 'grabbing');
+                    updateStatus();
+                }
+            }
+
+            function handleWheel(e) {
+                if (!image) return;
+                e.preventDefault();
+                const zoomFactor = 1.1;
+                const mousePos = getMousePos(e);
+                
+                const oldScale = transform.scale;
+                transform.scale *= e.deltaY < 0 ? zoomFactor : 1 / zoomFactor;
+
+                transform.panX = mousePos.x - (mousePos.x - transform.panX) * (transform.scale / oldScale);
+                transform.panY = mousePos.y - (mousePos.y - transform.panY) * (transform.scale / oldScale);
+
+                redrawCanvas();
+            }
+
+            function handleMouseDown(e) {
+                if (!image) return;
+                const mousePos = getMousePos(e);
+
+                if (isPanning) {
+                    canvas.classList.add('grabbing');
+                    canvas.classList.remove('grab');
+                    panStart = { x: mousePos.x - transform.panX, y: mousePos.y - transform.panY };
+                    return;
+                }
+                
+                const imagePos = screenToImageCoords(mousePos);
+
+                if (currentMode === 'editing') {
+                    const hit = getHit(imagePos);
+                    if (hit) {
+                        selectedLine = hit.line;
+                        selectedHandle = hit.handle;
+                        isDragging = true;
+                    } else {
+                        selectedLine = null;
+                        selectedHandle = null;
+                    }
+                } else if (currentMode === 'setting-home') {
+                    homePosition = imagePos;
+                    updateHomeInputs();
+                    setMode('idle');
+                    updateInfoPanel();
+                } else if (currentMode.startsWith('drawing')) {
+                    isDrawing = true;
+                    currentLineStart = imagePos;
+                }
+                redrawCanvas();
+            }
+
+            function handleMouseMove(e) {
+                if (!image) return;
+                const mousePos = getMousePos(e);
+
+                if (isPanning && panStart) {
+                    transform.panX = mousePos.x - panStart.x;
+                    transform.panY = mousePos.y - panStart.y;
+                    redrawCanvas();
+                    return;
+                }
+
+                const imagePos = screenToImageCoords(mousePos);
+
+                if (isDrawing) {
+                    redrawCanvas(); 
+                    ctx.save();
+                    ctx.setTransform(transform.scale, 0, 0, transform.scale, transform.panX, transform.panY);
+                    const color = currentMode === 'drawing-reference' ? 'rgba(59, 130, 246, 0.7)' : 'rgba(234, 179, 8, 0.7)';
+                    drawLine(currentLineStart, imagePos, color, 2 / transform.scale);
+                    ctx.restore();
+                } else if (isDragging && selectedLine) {
+                    const dx = imagePos.x - (selectedHandle === 'start' ? selectedLine.start.x : (selectedHandle === 'end' ? selectedLine.end.x : getMidpoint(selectedLine.start, selectedLine.end).x));
+                    const dy = imagePos.y - (selectedHandle === 'start' ? selectedLine.start.y : (selectedHandle === 'end' ? selectedLine.end.y : getMidpoint(selectedLine.start, selectedLine.end).y));
+                    
+                    if (selectedHandle === 'start') {
+                        selectedLine.start = { ...imagePos };
+                    } else if (selectedHandle === 'end') {
+                        selectedLine.end = { ...imagePos };
+                    } else if (selectedHandle === 'body') {
+                        selectedLine.start.x += dx; selectedLine.start.y += dy;
+                        selectedLine.end.x += dx; selectedLine.end.y += dy;
+                    }
+                    selectedLine.pixelLength = getDistance(selectedLine.start, selectedLine.end);
+                    if (selectedLine === referenceLine && scale && selectedLine.length > 0) {
+                        scale = referenceLine.length / referenceLine.pixelLength; // Recalculate scale
+                    }
+                    updateInfoPanel();
+                    redrawCanvas();
+                }
+            }
+
+            function handleMouseUp(e) {
+                if (isPanning) {
+                    canvas.classList.remove('grabbing');
+                    canvas.classList.add('grab');
+                    panStart = null;
+                    return;
+                }
+
+                if (isDragging) {
+                    isDragging = false;
+                    selectedHandle = null;
+                }
+                
+                if (!isDrawing) return;
+                isDrawing = false;
+                const lineEnd = screenToImageCoords(getMousePos(e));
+                const pixelLength = getDistance(currentLineStart, lineEnd);
+                if(pixelLength < 2) return;
+
+                if (currentMode === 'drawing-reference') {
+                    referenceLine = { start: currentLineStart, end: lineEnd, pixelLength, length: 0 };
+                    modal.classList.remove('hidden');
+                    modal.classList.add('flex');
+                    referenceLengthInput.focus();
+                } else if (currentMode === 'drawing-measure') {
+                    if (!scale) { alert("Please set a reference scale first."); return; }
+                    measurements.push({ start: currentLineStart, end: lineEnd, pixelLength });
+                    updateInfoPanel();
+                }
+                redrawCanvas();
+            }
+            
+            function handleSetScale() {
+                const length = parseFloat(referenceLengthInput.value);
+                unit = referenceUnitSelect.value;
+                if (!isNaN(length) && length > 0) {
+                    referenceLine.length = length;
+                    scale = (unit === 'pixels') ? 1 : length / referenceLine.pixelLength;
+                    
+                    modal.classList.add('hidden');
+                    modal.classList.remove('flex');
+                    referenceLengthInput.value = '';
+                    
+                    homeXUnitSpan.textContent = `(${unit})`;
+                    homeYUnitSpan.textContent = `(${unit})`;
+                    [homeXInput, homeYInput, setHomeManualBtn].forEach(el => el.disabled = false);
+
+                    updateHomeInputs();
+                    setMode('drawing-measure');
+                    updateInfoPanel();
+                    redrawCanvas();
+                } else {
+                    alert("Please enter a valid positive number.");
+                }
+            }
+
+            function handleSetHomeManually() {
+                const xVal = parseFloat(homeXInput.value);
+                const yVal = parseFloat(homeYInput.value);
+                if(!isNaN(xVal) && !isNaN(yVal) && scale) {
+                    homePosition = { x: xVal / scale, y: yVal / scale };
+                    setMode('idle');
+                    updateInfoPanel();
+                    redrawCanvas();
+                } else {
+                    alert("Please enter valid coordinates and ensure a scale is set.");
+                }
+            }
+
+            function updateHomeInputs() {
+                if (homePosition && scale) {
+                    homeXInput.value = (homePosition.x * scale).toFixed(2);
+                    homeYInput.value = (homePosition.y * scale).toFixed(2);
+                } else {
+                    homeXInput.value = '';
+                    homeYInput.value = '';
+                }
+            }
+            
+            // --- Drawing & Rendering ---
+
+            function redrawCanvas() {
+                ctx.save();
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.setTransform(transform.scale, 0, 0, transform.scale, transform.panX, transform.panY);
+
+                if (image) ctx.drawImage(image, 0, 0);
+
+                const lineWidthScale = 1 / transform.scale;
+                
+                if (referenceLine.start) {
+                    const isSelected = selectedLine === referenceLine;
+                    const color = isSelected ? '#0ea5e9' : '#3b82f6';
+                    const text = referenceLine.length > 0 ? `${referenceLine.length.toFixed(2)} ${unit}` : 'Reference';
+                    drawLine(referenceLine.start, referenceLine.end, color, 3 * lineWidthScale);
+                    drawEndpointsAndText(referenceLine, color, text, isSelected);
+                }
+
+                measurements.forEach(m => {
+                    const isSelected = selectedLine === m;
+                    const length = (m.pixelLength * scale) || 0;
+                    const color = isSelected ? '#f59e0b' : '#ca8a04';
+                    drawLine(m.start, m.end, color, 2 * lineWidthScale);
+                    drawEndpointsAndText(m, color, `${length.toFixed(2)} ${unit}`, isSelected);
+                });
+                
+                if (homePosition) {
+                    drawPoint(homePosition, '#ef4444', 10 * lineWidthScale, true);
+                }
+
+                ctx.restore();
+            }
+            
+            function drawEndpointsAndText(line, color, text, isSelected) {
+                const mid = getMidpoint(line.start, line.end);
+                drawPoint(mid, color, (isSelected ? 6 : 4) / transform.scale);
+                if(line.pixelLength * transform.scale > 50) { // Only draw text if line is long enough on screen
+                    drawText(text, mid.x, mid.y - (10 / transform.scale), color);
+                }
+                if (isSelected && currentMode === 'editing') {
+                    drawPoint(line.start, color, HANDLE_RADIUS / transform.scale);
+                    drawPoint(line.end, color, HANDLE_RADIUS / transform.scale);
+                }
+            }
+            
+            function drawLine(start, end, color, width) {
+                ctx.beginPath(); ctx.moveTo(start.x, start.y); ctx.lineTo(end.x, end.y);
+                ctx.strokeStyle = color; ctx.lineWidth = width; ctx.stroke();
+            }
+
+            function drawPoint(pos, color, radius = 5, isCrosshair = false) {
+                 ctx.strokeStyle = color; ctx.fillStyle = color;
+                 ctx.lineWidth = 2 / transform.scale;
+                 if (isCrosshair) {
+                     ctx.beginPath();
+                     ctx.moveTo(pos.x - radius, pos.y); ctx.lineTo(pos.x + radius, pos.y);
+                     ctx.moveTo(pos.x, pos.y - radius); ctx.lineTo(pos.x, pos.y + radius);
+                     ctx.stroke();
+                 } else {
+                    ctx.beginPath(); ctx.arc(pos.x, pos.y, radius, 0, 2 * Math.PI); ctx.fill();
+                 }
+            }
+
+            function drawText(text, x, y, color) {
+                const scaledFontSize = 14 / transform.scale;
+                ctx.font = `bold ${scaledFontSize}px Inter`;
+                const textWidth = ctx.measureText(text).width;
+                const padding = 4 / transform.scale;
+                
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+                ctx.fillRect(x - (textWidth/2) - padding, y - (scaledFontSize), textWidth + (padding*2), scaledFontSize + (padding*2));
+                
+                ctx.fillStyle = color; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                ctx.fillText(text, x, y);
+            }
+
+            // --- Calculations & UI Updates ---
+            
+            function getHit(pos) {
+                const hitRadius = (HANDLE_RADIUS * 1.5) / transform.scale;
+                const allLines = [referenceLine, ...measurements].filter(l => l.start);
+                for (const line of allLines) {
+                    if (getDistance(pos, line.start) < hitRadius) return { line, handle: 'start' };
+                    if (getDistance(pos, line.end) < hitRadius) return { line, handle: 'end' };
+                }
+                for (const line of allLines) {
+                    if (pointToLineSegmentDistance(pos, line.start, line.end) < hitRadius) return { line, handle: 'body' };
+                }
+                return null;
+            }
+
+            function getDistance(p1, p2) {
+                return Math.sqrt(Math.pow(p2.x - p1.x, 2) + Math.pow(p2.y - p1.y, 2));
+            }
+
+            function getMidpoint(p1, p2) {
+                return { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
+            }
+
+            function pointToLineSegmentDistance(p, v, w) {
+                const l2 = getDistance(v, w) ** 2; if (l2 === 0) return getDistance(p, v);
+                let t = ((p.x - v.x) * (w.x - v.x) + (p.y - v.y) * (w.y - v.y)) / l2;
+                t = Math.max(0, Math.min(1, t));
+                return getDistance(p, { x: v.x + t * (w.x - v.x), y: v.y + t * (w.y - v.y) });
+            }
+            
+            function getRelativeCoords(point) {
+                if (!homePosition || !scale) return { x: 'N/A', y: 'N/A' };
+                return {
+                    x: ((point.x - homePosition.x) * scale).toFixed(2),
+                    y: ((homePosition.y - point.y) * scale).toFixed(2), // Invert Y
+                };
+            }
+
+            function updateInfoPanel() {
+                measurementsContainer.innerHTML = '';
+                const homeInfo = homePosition ? `(Home: ${(homePosition.x * (scale||1)).toFixed(0)}, ${(homePosition.y * (scale||1)).toFixed(0)} ${unit})` : '(Home not set)';
+                if (referenceLine.length > 0) {
+                    measurementsContainer.innerHTML += `
+                        <div class="bg-blue-50 p-3 rounded-lg border border-blue-200">
+                           <h3 class="font-bold text-blue-800">Reference Scale ${homeInfo}</h3>
+                           <p class="text-sm text-blue-700"><b>Length:</b> ${referenceLine.length.toFixed(2)} ${unit}</p>
+                        </div>`;
+                }
+                measurements.forEach((m, index) => {
+                    const length = m.pixelLength * (scale || 0);
+                    const mid = getMidpoint(m.start, m.end);
+                    const startRel = getRelativeCoords(m.start);
+                    const midRel = getRelativeCoords(mid);
+                    const endRel = getRelativeCoords(m.end);
+                    measurementsContainer.innerHTML += `
+                        <div class="bg-yellow-50 p-3 rounded-lg border border-yellow-200">
+                            <h3 class="font-bold text-yellow-800">Measurement #${index + 1}</h3>
+                            <p class="text-sm text-yellow-700"><b>Length:</b> ${length.toFixed(2)} ${unit}</p>
+                            <div class="mt-2 text-xs text-yellow-600 grid grid-cols-3 gap-1 text-center">
+                                <div><b>Start</b><br>X:${startRel.x}<br>Y:${startRel.y}</div>
+                                <div><b>Mid</b><br>X:${midRel.x}<br>Y:${midRel.y}</div>
+                                <div><b>End</b><br>X:${endRel.x}<br>Y:${endRel.y}</div>
+                            </div>
+                        </div>`;
+                });
+            }
+
+            function saveResults() {
+                const data = {
+                    unit, scale, homePosition,
+                    referenceLine: referenceLine.start ? referenceLine : null,
+                    measurements
+                };
+                const dataStr = JSON.stringify(data, null, 2);
+                const blob = new Blob([dataStr], {type: "application/json"});
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'image-measurements.json';
+                a.click();
+                URL.revokeObjectURL(url);
+            }
+
+            function resetAll(soft = false) {
+                if (!soft) image = null;
+                scale = null;
+                unit = 'pixels';
+                homeXUnitSpan.textContent = `(${unit})`;
+                homeYUnitSpan.textContent = `(${unit})`;
+                referenceLine = { start: null, end: null, length: 0, pixelLength: 0 };
+                measurements = [];
+                homePosition = null;
+                currentMode = 'idle';
+                isDrawing = false;
+                selectedLine = null;
+                selectedHandle = null;
+                transform = { scale: 1, panX: 0, panY: 0 };
+                
+                if (!soft) {
+                    dropZone.classList.remove('hidden');
+                    [drawMeasureBtn, setHomeBtn, editLinesBtn, setHomeManualBtn, homeXInput, homeYInput].forEach(b => b.disabled = true);
+                }
+
+                updateButtonStyles();
+                updateStatus();
+                updateInfoPanel();
+                updateHomeInputs();
+                redrawCanvas();
+            }
+
+            // --- Start the app ---
+            init();
+        });
+    </script>
+</body>
+</html>
+
