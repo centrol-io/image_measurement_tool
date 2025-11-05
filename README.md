@@ -2,7 +2,7 @@
 
 A powerful, browser-based application for performing precise measurements on images. This tool allows users to set a reference scale and then draw lines to measure lengths and determine coordinates relative to a user-defined origin. It's built as a single, self-contained HTML file, making it incredibly easy to use and deploy.
 
-* Live Demo Link: *
+Live Demo Link: https://centrol-io.github.io/image_measurement_tool/
 
 ## Features
 
