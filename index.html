@@ -3,695 +3,456 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Image Measurement Tool</title>
+    <title>Multi-Layer Area & Wall Calculator</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        body {
-            font-family: 'Inter', sans-serif;
-        }
-        canvas {
-            cursor: crosshair;
-            border-radius: 0.5rem;
-            background-color: #f0f0f0; /* So the canvas is visible before image load */
-        }
-        .drop-zone-active {
-            border-color: #2563eb;
-            background-color: #eff6ff;
-        }
-        .btn-active {
-            background-color: #1d4ed8;
-            color: white;
-            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.5);
-        }
-        .info-panel {
-            max-height: calc(100vh - 12rem);
-            overflow-y: auto;
-        }
-        .grab { cursor: grab; }
-        .grabbing { cursor: grabbing; }
+        /* Custom styles */
+        body { font-family: 'Inter', sans-serif; overscroll-behavior: none; }
+        canvas { background-color: transparent; cursor: crosshair; display: block; border-radius: 0.5rem; touch-action: none; }
+        .distance-label { position: absolute; background-color: rgba(0, 0, 0, 0.75); color: white; padding: 3px 6px; font-size: 0.8rem; border-radius: 0.25rem; pointer-events: none; white-space: nowrap; z-index: 10; transform: translate(-50%, -50%); box-shadow: 0 1px 3px rgba(0,0,0,0.3); }
+        html, body { height: 100%; margin: 0; }
+        .main-container { display: flex; flex-direction: column; min-height: 100vh; }
+        .canvas-container { position: relative; flex-grow: 1; width: 100%; height: 55vh; background-size: contain; background-position: center; background-repeat: no-repeat; border-radius: 0.5rem; background-color: #f0f9ff; overflow: hidden; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1); margin-bottom: 1rem; border: 2px dashed transparent; transition: border-color 0.2s ease-in-out; }
+        .canvas-container.drag-over { border-color: #3b82f6; }
+        #drawingCanvas { width: 100%; height: 100%; position: absolute; top: 0; left: 0; z-index: 1; }
+        label, select, input, button { margin-top: 0.5rem; margin-bottom: 0.5rem; }
+        select, input[type="number"] { border: 1px solid #ccc; padding: 0.5rem; border-radius: 0.375rem; }
+        input[readonly] { background-color: #e5e7eb; cursor: not-allowed; }
+        button { transition: background-color 0.2s ease-in-out; }
+        input[type="file"] { display: none; }
+        .custom-file-upload { border: 1px solid #ccc; display: inline-block; padding: 8px 12px; cursor: pointer; background-color: #e5e7eb; color: #374151; border-radius: 0.375rem; font-weight: 500; text-align: center; }
+        .custom-file-upload:hover { background-color: #d1d5db; }
+        #messageBox { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background-color: rgba(0, 0, 0, 0.8); color: white; padding: 12px 25px; border-radius: 8px; z-index: 1000; display: none; font-size: 0.9rem; box-shadow: 0 2px 10px rgba(0,0,0,0.2); text-align: center; }
+        #scaleDefinition { background-color: #fffbeb; border: 1px solid #facc15; border-radius: 0.375rem; padding: 0.75rem; margin-top: 0.5rem; }
+        /* Layer Tabs Styles */
+        .layer-tabs { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid #e5e7eb; }
+        .layer-tab { padding: 0.5rem 1rem; border: 1px solid #d1d5db; border-radius: 0.375rem; cursor: pointer; background-color: #f9fafb; color: #374151; font-size: 0.875rem; font-weight: 500; transition: all 0.2s ease-in-out; position: relative; }
+        .layer-tab:hover { background-color: #f3f4f6; border-color: #9ca3af; }
+        .layer-tab.active { background-color: #3b82f6; color: white; border-color: #3b82f6; }
+         .layer-tab .rename-input { width: 80px; font-size: 0.875rem; padding: 2px 4px; border: 1px solid #9ca3af; border-radius: 0.25rem; margin-right: 5px; color: #374151; }
+        .layer-tab .close-btn { position: absolute; top: -5px; right: -5px; background-color: #ef4444; color: white; border-radius: 50%; width: 18px; height: 18px; font-size: 12px; line-height: 16px; text-align: center; cursor: pointer; border: 1px solid white; opacity: 0.7; transition: opacity 0.2s; }
+         .layer-tab:hover .close-btn { opacity: 1; } .layer-tab.active .close-btn { opacity: 1; }
+        #addLayerButton { padding: 0.5rem 1rem; border: 1px dashed #9ca3af; background-color: #f9fafb; color: #6b7280; }
+        #addLayerButton:hover { background-color: #f3f4f6; border-color: #6b7280; color: #374151; }
+        /* Summary Table Styles */
+        .summary-table { width: 100%; margin-top: 1rem; border-collapse: collapse; background-color: white; box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1); border-radius: 0.5rem; overflow: hidden; }
+        .summary-table th, .summary-table td { border: 1px solid #e5e7eb; padding: 0.75rem 1rem; text-align: left; font-size: 0.875rem; }
+        .summary-table th { background-color: #f9fafb; font-weight: 600; color: #374151; }
+        .summary-table td { color: #4b5563; } .summary-table tr:nth-child(even) td { background-color: #f9fafb; }
+        .summary-table tfoot td { font-weight: 600; background-color: #f3f4f6; } .summary-table .area-col { text-align: right; }
+        /* Drawing Mode Radio Buttons */
+        .mode-selector input[type="radio"] { display: none; /* Hide actual radio */ }
+        .mode-selector label { padding: 0.5rem 1rem; border: 1px solid #d1d5db; border-radius: 0.375rem; cursor: pointer; background-color: #f9fafb; color: #374151; font-size: 0.875rem; font-weight: 500; transition: all 0.2s ease-in-out; }
+        .mode-selector input[type="radio"]:checked + label { background-color: #60a5fa; /* Lighter blue */ color: white; border-color: #3b82f6; }
+        .mode-selector label:hover { background-color: #f3f4f6; }
+        .mode-selector input[type="radio"]:checked + label:hover { background-color: #3b82f6; /* Darker blue on hover when checked */ }
+
     </style>
 </head>
-<body class="bg-gray-100 text-gray-800 flex flex-col md:flex-row h-screen antialiased overflow-hidden">
+<body class="bg-gray-100">
 
-    <!-- Controls & Info Panel -->
-    <div class="w-full md:w-96 bg-white p-6 shadow-lg flex flex-col space-y-4 order-2 md:order-1">
-        <header>
-            <h1 class="text-2xl font-bold text-gray-900">Image Measurement Tool</h1>
-            <p class="text-sm text-gray-500 mt-1">Zoom, pan, and measure your images with precision.</p>
-        </header>
+    <div id="messageBox"></div>
 
-        <div class="space-y-3">
-            <h2 class="text-lg font-semibold text-gray-700 border-b pb-2">Controls</h2>
-            <button id="set-reference-btn" class="w-full text-left bg-white hover:bg-gray-50 border border-gray-300 text-gray-700 font-semibold py-2 px-4 rounded-lg transition duration-150 ease-in-out">1. Set Reference Scale</button>
-            <button id="draw-measure-btn" class="w-full text-left bg-white hover:bg-gray-50 border border-gray-300 text-gray-700 font-semibold py-2 px-4 rounded-lg transition duration-150 ease-in-out" disabled>2. Draw Measurement Line</button>
-            <button id="edit-lines-btn" class="w-full text-left bg-white hover:bg-gray-50 border border-gray-300 text-gray-700 font-semibold py-2 px-4 rounded-lg transition duration-150 ease-in-out" disabled>3. Edit Lines</button>
-            <button id="set-home-btn" class="w-full text-left bg-white hover:bg-gray-50 border border-gray-300 text-gray-700 font-semibold py-2 px-4 rounded-lg transition duration-150 ease-in-out" disabled>4. Set Home Position</button>
-            <div class="flex items-center space-x-2">
-                <label class="flex-1">
-                    <span class="text-xs text-gray-500">Home X <span id="home-x-unit">(px)</span></span>
-                    <input type="number" id="home-x-input" placeholder="Home X" class="w-full px-2 py-1 border rounded-md text-sm" disabled>
+    <div class="main-container p-4 md:p-6 lg:p-8 max-w-7xl mx-auto">
+
+        <h1 class="text-2xl md:text-3xl font-bold text-center text-gray-800 mb-4">Multi-Layer Area & Wall Calculator</h1>
+        <p id="instructionText" class="text-center text-gray-600 mb-2">Add or select a layer to begin.</p>
+
+        <div id="layerTabsContainer" class="layer-tabs">
+            <button id="addLayerButton" class="layer-tab">+</button>
+        </div>
+
+         <div class="layer-controls bg-gray-50 p-3 rounded-lg shadow-sm mb-4 flex flex-wrap items-center justify-center gap-x-4 gap-y-2">
+             <span class="text-sm font-medium text-gray-700">Active Layer Controls:</span>
+             <div class="flex items-center gap-2">
+                 <label for="ceilingHeightInput" class="text-sm font-medium text-gray-700 whitespace-nowrap">Ceiling Height:</label>
+                 <input type="number" id="ceilingHeightInput" value="8" min="0" step="0.1" class="w-20 border-gray-300 rounded-md shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50">
+                 <span id="ceilingHeightUnit" class="text-sm text-gray-600">ft</span> </div>
+             <div class="flex items-center gap-2 mode-selector">
+                 <span class="text-sm font-medium text-gray-700">Mode:</span>
+                 <input type="radio" id="modePerimeter" name="drawingMode" value="perimeter" checked>
+                 <label for="modePerimeter">Perimeter</label>
+                 <input type="radio" id="modeInnerWall" name="drawingMode" value="innerWall">
+                 <label for="modeInnerWall">Inner Wall</label>
+             </div>
+         </div>
+
+
+        <div class="controls bg-white p-4 rounded-lg shadow-md mb-4 flex flex-wrap items-center justify-center gap-x-4 gap-y-2">
+            <div class="flex items-center gap-2">
+                <label for="scaleInput" class="text-sm font-medium text-gray-700 whitespace-nowrap">Scale:</label>
+                <input type="number" id="scaleInput" value="10" min="0.01" step="0.1" class="w-20 border-gray-300 rounded-md shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50">
+                <span id="scaleUnitDisplay" class="text-sm text-gray-600">pixels/in</span>
+            </div>
+
+            <div class="flex items-center gap-2">
+                <label for="unitSelect" class="text-sm font-medium text-gray-700">Display Unit:</label>
+                <select id="unitSelect" class="border-gray-300 rounded-md shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50">
+                    <option value="inches">Inches (in)</option>
+                    <option value="feet" selected>Feet (ft)</option> <option value="feet-inches">Feet & Inches (ft-in)</option>
+                    <option value="meters">Meters (m)</option>
+                    <option value="cm">Centimeters (cm)</option>
+                </select>
+            </div>
+
+             <div class="flex items-center gap-2">
+                 <span class="text-sm font-medium text-gray-700">Floor Area:</span>
+                 <span id="areaOutput" class="text-sm font-semibold text-indigo-600">0.00</span>
+                 <span id="areaUnit" class="text-sm text-gray-600">sq ft</span> </div>
+
+            <div class="flex items-center gap-2">
+                <label for="imageUpload" class="custom-file-upload">
+                    Upload BG
                 </label>
-                 <label class="flex-1">
-                    <span class="text-xs text-gray-500">Home Y <span id="home-y-unit">(px)</span></span>
-                    <input type="number" id="home-y-input" placeholder="Home Y" class="w-full px-2 py-1 border rounded-md text-sm" disabled>
-                </label>
-                <button id="set-home-manual-btn" class="self-end px-3 py-1 bg-gray-200 hover:bg-gray-300 rounded-md text-sm font-semibold" disabled>Set</button>
+                <input type="file" id="imageUpload" accept="image/*">
+                 <button id="removeBgButton" class="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-3 rounded-md shadow text-xs" title="Remove Background Image">X</button>
             </div>
-            <div class="flex items-center space-x-2 pt-2">
-                 <button id="save-btn" class="w-1/2 text-center bg-green-500 hover:bg-green-600 text-white font-semibold py-2 px-4 rounded-lg transition">Save Results</button>
-                 <button id="clear-btn" class="w-1/2 text-center bg-red-500 hover:bg-red-600 text-white font-semibold py-2 px-4 rounded-lg transition">Clear All</button>
-            </div>
-        </div>
+             <span class="text-xs text-gray-500 italic ml-2">(Or paste/drag)</span>
 
-        <div id="info-panel" class="flex-grow space-y-4 pt-4 info-panel">
-            <h2 class="text-lg font-semibold text-gray-700 border-b pb-2">Information</h2>
-            <div id="status" class="text-sm bg-blue-100 border-l-4 border-blue-500 text-blue-700 p-3 rounded-r-lg">
-                Upload, paste, or drop an image to start.
-            </div>
-            <div id="measurements-container" class="space-y-3">
-                <!-- Measurement data will be injected here -->
-            </div>
-        </div>
-    </div>
-
-    <!-- Main Content Area -->
-    <main class="flex-grow bg-gray-200 flex items-center justify-center p-4 md:p-8 order-1 md:order-2">
-        <div id="canvas-container" class="relative w-full h-full max-w-7xl max-h-[90vh] bg-white rounded-xl shadow-md flex items-center justify-center overflow-hidden">
-            <div id="drop-zone" class="w-full h-full border-4 border-dashed border-gray-300 rounded-xl flex flex-col items-center justify-center text-center p-8 transition duration-300">
-                <svg class="w-16 h-16 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
-                <h3 class="text-xl font-semibold text-gray-600">Drag & Drop Image Here</h3>
-                <p class="text-gray-500 mt-1">or</p>
-                <input type="file" id="file-input" class="hidden">
-                <label for="file-input" class="mt-2 cursor-pointer bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg transition">Select File</label>
-                <p class="text-gray-500 mt-2">You can also paste an image or image URL.</p>
-            </div>
-            <canvas id="canvas"></canvas>
-        </div>
-    </main>
-
-    <!-- Modal for reference length input -->
-    <div id="modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden items-center justify-center z-50">
-      <div class="relative mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
-        <div class="mt-3 text-center">
-          <h3 class="text-lg leading-6 font-medium text-gray-900">Set Reference Length</h3>
-          <div class="mt-2 px-7 py-3 space-y-3">
-            <p class="text-sm text-gray-500">
-              Enter the known length of the line you just drew. This will set the scale for all other measurements.
-            </p>
-            <input type="number" id="reference-length-input" class="text-center w-full px-3 py-2 text-gray-700 border rounded-lg focus:outline-none focus:ring focus:border-blue-300" placeholder="e.g., 100">
-            <select id="reference-unit-select" class="w-full px-3 py-2 text-gray-700 border rounded-lg focus:outline-none focus:ring focus:border-blue-300">
-                <option value="mm">mm</option>
-                <option value="cm">cm</option>
-                <option value="in">in</option>
-                <option value="pixels">pixels</option>
-            </select>
-          </div>
-          <div class="items-center px-4 py-3">
-            <button id="modal-ok-btn" class="px-4 py-2 bg-blue-500 text-white text-base font-medium rounded-md w-full shadow-sm hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-300">
-              Set Scale
+             <button id="undoActionButton" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-md shadow">
+                Undo Action
             </button>
-          </div>
+             <button id="clearLayerButton" class="bg-orange-500 hover:bg-orange-600 text-white font-bold py-2 px-4 rounded-md shadow">
+                Clear Layer
+            </button>
+             <button id="resetAllButton" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-md shadow">
+                Reset All
+            </button>
         </div>
-      </div>
-    </div>
 
+         <div id="scaleDefinition" class="hidden bg-yellow-50 p-3 rounded-md border border-yellow-300 shadow-sm mb-4 flex flex-col sm:flex-row items-center justify-center gap-2">
+             <label for="distanceInput" class="text-sm font-medium text-gray-700 whitespace-nowrap">Distance of first segment:</label>
+             <input type="number" id="distanceInput" min="0.01" step="0.01" class="w-24 border-gray-300 rounded-md shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50">
+             <span id="distanceInputUnit" class="text-sm text-gray-600">in</span>
+             <button id="setScaleButton" class="bg-green-500 hover:bg-green-600 text-white font-bold py-1 px-3 rounded-md shadow text-sm">Set Scale</button>
+        </div>
+
+        <div id="canvasContainer" class="canvas-container">
+            <canvas id="drawingCanvas"></canvas>
+             <div id="tempLinePreview" style="position: absolute; border-top: 1px dashed #555; pointer-events: none; display: none; z-index: 5;"></div>
+        </div>
+
+        <h2 class="text-xl font-semibold text-gray-700 mb-2 text-center">Area Summary</h2>
+        <div class="overflow-x-auto">
+             <table id="summaryTable" class="summary-table min-w-full">
+                 <thead>
+                     <tr>
+                         <th>Layer Name</th>
+                         <th class="area-col">Floor Area (sq ft)</th>
+                         <th class="area-col">Wall Surface (sq ft)</th>
+                     </tr>
+                 </thead>
+                 <tbody id="summaryTableBody">
+                     </tbody>
+                 <tfoot>
+                     <tr>
+                         <td><strong>Totals</strong></td>
+                         <td class="area-col"><strong id="totalFloorAreaOutput">0.00 sq ft</strong></td>
+                         <td class="area-col"><strong id="totalWallAreaOutput">0.00 sq ft</strong></td>
+                     </tr>
+                 </tfoot>
+             </table>
+        </div>
+
+    </div>
 
     <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            // DOM Elements
-            const canvas = document.getElementById('canvas');
-            const ctx = canvas.getContext('2d');
-            const dropZone = document.getElementById('drop-zone');
-            const canvasContainer = document.getElementById('canvas-container');
-            const fileInput = document.getElementById('file-input');
-            const statusDiv = document.getElementById('status');
-            const measurementsContainer = document.getElementById('measurements-container');
-            const modal = document.getElementById('modal');
-            const modalOkBtn = document.getElementById('modal-ok-btn');
-            const referenceLengthInput = document.getElementById('reference-length-input');
-            const referenceUnitSelect = document.getElementById('reference-unit-select');
-            const homeXInput = document.getElementById('home-x-input');
-            const homeYInput = document.getElementById('home-y-input');
-            const homeXUnitSpan = document.getElementById('home-x-unit');
-            const homeYUnitSpan = document.getElementById('home-y-unit');
+        // --- DOM Elements ---
+        const canvas = document.getElementById('drawingCanvas');
+        const ctx = canvas.getContext('2d');
+        const scaleInput = document.getElementById('scaleInput');
+        const scaleUnitDisplay = document.getElementById('scaleUnitDisplay');
+        const unitSelect = document.getElementById('unitSelect');
+        const areaOutput = document.getElementById('areaOutput'); // Now Floor Area
+        const areaUnit = document.getElementById('areaUnit');
+        const undoActionButton = document.getElementById('undoActionButton'); // Renamed
+        const clearLayerButton = document.getElementById('clearLayerButton');
+        const resetAllButton = document.getElementById('resetAllButton');
+        const canvasContainer = document.getElementById('canvasContainer');
+        const imageUpload = document.getElementById('imageUpload');
+        const removeBgButton = document.getElementById('removeBgButton');
+        const messageBox = document.getElementById('messageBox');
+        const instructionText = document.getElementById('instructionText');
+        const scaleDefinitionDiv = document.getElementById('scaleDefinition');
+        const distanceInput = document.getElementById('distanceInput');
+        const distanceInputUnit = document.getElementById('distanceInputUnit');
+        const setScaleButton = document.getElementById('setScaleButton');
+        const layerTabsContainer = document.getElementById('layerTabsContainer');
+        const addLayerButton = document.getElementById('addLayerButton');
+        const summaryTableBody = document.getElementById('summaryTableBody');
+        const totalFloorAreaOutput = document.getElementById('totalFloorAreaOutput'); // Updated ID
+        const totalWallAreaOutput = document.getElementById('totalWallAreaOutput'); // New ID
+        const ceilingHeightInput = document.getElementById('ceilingHeightInput');
+        const ceilingHeightUnit = document.getElementById('ceilingHeightUnit');
+        const drawingModeRadios = document.querySelectorAll('input[name="drawingMode"]');
+        const tempLinePreview = document.getElementById('tempLinePreview');
 
-            // Buttons
-            const setReferenceBtn = document.getElementById('set-reference-btn');
-            const drawMeasureBtn = document.getElementById('draw-measure-btn');
-            const editLinesBtn = document.getElementById('edit-lines-btn');
-            const setHomeBtn = document.getElementById('set-home-btn');
-            const setHomeManualBtn = document.getElementById('set-home-manual-btn');
-            const clearBtn = document.getElementById('clear-btn');
-            const saveBtn = document.getElementById('save-btn');
-            const controlButtons = [setReferenceBtn, drawMeasureBtn, setHomeBtn, editLinesBtn];
 
-            // State
-            let image = null;
-            let scale = null; // real units per pixel
-            let unit = 'pixels';
-            let referenceLine = { start: null, end: null, length: 0, pixelLength: 0 };
-            let measurements = [];
-            let homePosition = null;
-            let currentMode = 'idle';
-            let isDrawing = false;
-            let currentLineStart = null;
-            
-            // Zoom & Pan State
-            let transform = { scale: 1, panX: 0, panY: 0 };
-            let isPanning = false;
-            let panStart = { x: 0, y: 0 };
+        // --- State Variables ---
+        let layers = [];
+        let activeLayerId = null;
+        let nextLayerId = 1;
+        let selectedPointIndex = null; // Index of the perimeter point being dragged
+        let isDragging = false;        // Flag if a perimeter point is currently being dragged
+        let dragOffsetX = 0;
+        let dragOffsetY = 0;
+        let currentDrawingMode = 'perimeter'; // 'perimeter' or 'innerWall'
+        let innerWallStartPoint = null; // Temporarily store start point when drawing inner wall
+        let lastAction = null; // Track last action for undo ('addPerimeter', 'addWall')
+        let interactionEndedOffCanvas = false; // Flag to track if interaction ended outside
 
-            // Editing State
-            let selectedLine = null;
-            let selectedHandle = null; // 'start', 'end', or 'body'
-            let isDragging = false;
-            const HANDLE_RADIUS = 8;
-            
-            // --- Initialization & Event Listeners ---
-            
-            function init() {
-                resizeCanvas();
-                window.addEventListener('resize', resizeCanvas);
-                
-                // Image Loading
-                dropZone.addEventListener('dragover', (e) => { e.preventDefault(); e.stopPropagation(); dropZone.classList.add('drop-zone-active'); });
-                dropZone.addEventListener('dragleave', (e) => { e.preventDefault(); e.stopPropagation(); dropZone.classList.remove('drop-zone-active'); });
-                dropZone.addEventListener('drop', handleDrop);
-                fileInput.addEventListener('change', (e) => handleFiles(e.target.files));
-                document.addEventListener('paste', handlePaste);
+        // --- Constants ---
+        const INCHES_PER_FOOT = 12;
+        const INCHES_PER_METER = 39.3701;
+        const INCHES_PER_CM = 0.393701;
+        const FEET_PER_METER = 1 / 0.3048; // More precise
+        const CM_PER_INCH = 2.54;
+        const POINT_RADIUS = 6;
+        const HIT_RADIUS = 12;
 
-                // Canvas Mouse & Touch Events
-                canvas.addEventListener('mousedown', handleMouseDown);
-                canvas.addEventListener('mousemove', handleMouseMove);
-                canvas.addEventListener('mouseup', handleMouseUp);
-                canvas.addEventListener('mouseleave', handleMouseUp); // End action if mouse leaves
-                canvas.addEventListener('wheel', handleWheel);
+        // --- Utility Functions ---
+        function showMessage(message, duration = 3000) { /* ... no changes ... */ messageBox.textContent = message; messageBox.style.display = 'block'; if (messageBox.timeoutId) clearTimeout(messageBox.timeoutId); messageBox.timeoutId = setTimeout(() => { messageBox.style.display = 'none'; messageBox.timeoutId = null; }, duration); }
+        function generateLayerId() { /* ... no changes ... */ return `layer_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`; }
+        function getActiveLayer() { /* ... no changes ... */ if (!activeLayerId) return null; return layers.find(layer => layer.id === activeLayerId); }
 
-                // Keyboard
-                document.addEventListener('keydown', handleKeyDown);
-                document.addEventListener('keyup', handleKeyUp);
+        // --- Layer Management ---
+        function createNewLayer(name = `Layer ${nextLayerId++}`) { /* ... no changes ... */ const newLayer = { id: generateLayerId(), name: name, perimeterPoints: [], innerWalls: [], backgroundImageUrl: null, scalePixelsPerInch: null, isScaleDefinedByUser: false, pixelDistanceFirstSegment: 0, ceilingHeightInches: 8 * INCHES_PER_FOOT, floorAreaSqPixels: 0, wallLengthPixels: 0, distanceLabels: [] }; return newLayer; }
+        function addLayer(switchToNew = true) { /* ... no changes ... */ const newLayer = createNewLayer(); layers.push(newLayer); renderLayerTabs(); if (switchToNew) { switchLayer(newLayer.id); } updateSummaryTable(); if(layers.length === 1 && switchToNew) { updateInstructionText(); } }
+        function switchLayer(layerId) { /* ... no changes ... */ if (activeLayerId === layerId) return; isDragging = false; selectedPointIndex = null; innerWallStartPoint = null; activeLayerId = layerId; const layer = getActiveLayer(); if (!layer) { console.error("Attempted to switch to non-existent layer:", layerId); activeLayerId = null; if (layers.length > 0) { switchLayer(layers[0].id); } else { clearCanvasAndUI(); updateInstructionText(); } return; } scaleInput.value = layer.scalePixelsPerInch !== null ? layer.scalePixelsPerInch.toFixed(4) : '10'; scaleInput.readOnly = layer.isScaleDefinedByUser; scaleInput.classList.toggle('cursor-not-allowed', layer.isScaleDefinedByUser); scaleInput.classList.toggle('bg-gray-200', layer.isScaleDefinedByUser); scaleUnitDisplay.textContent = 'pixels/in'; scaleDefinitionDiv.classList.toggle('hidden', !(layer.perimeterPoints.length === 2 && !layer.isScaleDefinedByUser)); if (layer.perimeterPoints.length === 2 && !layer.isScaleDefinedByUser) { distanceInputUnit.textContent = getUnitAbbreviation(unitSelect.value); distanceInput.focus(); } updateCeilingHeightInput(); document.getElementById('modePerimeter').checked = true; currentDrawingMode = 'perimeter'; setBackgroundImage(layer.backgroundImageUrl, false); updateActiveLayerAreaDisplay(); renderLayerTabs(); updateInstructionText(); requestAnimationFrame(draw); }
+        function deleteLayer(layerIdToDelete) { // FIX: Correctly switch layer after deletion
+             if (layers.length <= 1) { showMessage("Cannot delete the last layer.", 3000); return; }
+             const layerIndexToDelete = layers.findIndex(l => l.id === layerIdToDelete); if (layerIndexToDelete === -1) return;
 
-                // Button Clicks
-                setReferenceBtn.addEventListener('click', () => setMode('drawing-reference'));
-                drawMeasureBtn.addEventListener('click', () => setMode('drawing-measure'));
-                editLinesBtn.addEventListener('click', () => setMode('editing'));
-                setHomeBtn.addEventListener('click', () => setMode('setting-home'));
-                setHomeManualBtn.addEventListener('click', handleSetHomeManually);
-                clearBtn.addEventListener('click', resetAll);
-                saveBtn.addEventListener('click', saveResults);
+             const deletedLayerWasActive = activeLayerId === layerIdToDelete;
 
-                // Modal
-                modalOkBtn.addEventListener('click', handleSetScale);
-            }
+             // Remove layer data
+             layers.splice(layerIndexToDelete, 1);
 
-            function resizeCanvas() {
-                canvas.width = canvasContainer.clientWidth;
-                canvas.height = canvasContainer.clientHeight;
-                redrawCanvas();
-            }
-
-            // --- Mode Management ---
-
-            function setMode(mode) {
-                if (!image) return;
-                currentMode = mode;
-                selectedLine = null;
-                selectedHandle = null;
-                isDragging = false;
-                updateButtonStyles();
-                updateStatus();
-                redrawCanvas();
-            }
-
-            function updateButtonStyles() {
-                controlButtons.forEach(btn => btn.classList.remove('btn-active'));
-                if (currentMode === 'drawing-reference') setReferenceBtn.classList.add('btn-active');
-                if (currentMode === 'drawing-measure') drawMeasureBtn.classList.add('btn-active');
-                if (currentMode === 'setting-home') setHomeBtn.classList.add('btn-active');
-                if (currentMode === 'editing') editLinesBtn.classList.add('btn-active');
-            }
-
-            function updateStatus() {
-                switch (currentMode) {
-                    case 'drawing-reference': statusDiv.innerHTML = "<b>Mode:</b> Draw the reference line on a known length."; break;
-                    case 'drawing-measure': statusDiv.innerHTML = "<b>Mode:</b> Draw a line to measure it."; break;
-                    case 'editing': statusDiv.innerHTML = "<b>Mode:</b> Click to select a line. Drag handles to resize, or drag body to move."; break;
-                    case 'setting-home': statusDiv.innerHTML = "<b>Mode:</b> Click to set the (0,0) home position."; break;
-                    default: statusDiv.innerHTML = image ? "Image loaded. Select a mode to begin." : "Upload an image to start.";
-                }
-                 if(isPanning) statusDiv.innerHTML = "<b>Panning:</b> Hold SPACE and drag to move the view.";
-            }
-
-            // --- Image Handling ---
-            
-            function handleDrop(e) {
-                e.preventDefault(); e.stopPropagation();
-                dropZone.classList.remove('drop-zone-active');
-                handleFiles(e.dataTransfer.files);
-            }
-
-            function handlePaste(e) {
-                const items = (e.clipboardData || e.originalEvent.clipboardData).items;
-                for (const item of items) {
-                    if (item.kind === 'file' && item.type.startsWith('image/')) {
-                        handleFiles([item.getAsFile()]);
-                        return;
-                    }
-                }
-                const text = (e.clipboardData || window.clipboardData).getData('text/plain');
-                if (text.match(/\.(jpeg|jpg|gif|png)$/) != null) {
-                    const proxyUrl = 'https://api.allorigins.win/raw?url=';
-                    loadImage(proxyUrl + encodeURIComponent(text));
-                }
-            }
-
-            function handleFiles(files) {
-                if (files && files.length > 0 && files[0].type.startsWith('image/')) {
-                    const reader = new FileReader();
-                    reader.onload = (e) => loadImage(e.target.result);
-                    reader.readAsDataURL(files[0]);
-                }
-            }
-
-            function loadImage(src) {
-                resetAll(true); // Soft reset
-                image = new Image();
-                image.crossOrigin = "Anonymous";
-                image.onload = () => {
-                    const canvasAspect = canvas.width / canvas.height;
-                    const imageAspect = image.width / image.height;
-                    let initialScale;
-                    if (imageAspect > canvasAspect) {
-                        initialScale = canvas.width / image.width;
-                    } else {
-                        initialScale = canvas.height / image.height;
-                    }
-                    transform.scale = initialScale * 0.95; 
-                    transform.panX = (canvas.width - image.width * transform.scale) / 2;
-                    transform.panY = (canvas.height - image.height * transform.scale) / 2;
-                    dropZone.classList.add('hidden');
-                    canvas.classList.remove('hidden');
-                    [drawMeasureBtn, setHomeBtn, editLinesBtn].forEach(b => b.disabled = false);
-                    setMode('drawing-reference');
-                    redrawCanvas();
-                };
-                image.src = src;
-            }
-
-            // --- Coordinate Transformation ---
-            
-            function getMousePos(e) {
-                const rect = canvas.getBoundingClientRect();
-                return { x: e.clientX - rect.left, y: e.clientY - rect.top };
-            }
-
-            function screenToImageCoords(point) {
-                return {
-                    x: (point.x - transform.panX) / transform.scale,
-                    y: (point.y - transform.panY) / transform.scale
-                };
-            }
-
-            // --- Event Handlers ---
-
-            function handleKeyDown(e) {
-                if (e.code === 'Space' && !isPanning && image) {
-                    isPanning = true;
-                    canvas.classList.add('grab');
-                    updateStatus();
-                }
-            }
-
-            function handleKeyUp(e) {
-                if (e.code === 'Space') {
-                    isPanning = false;
-                    canvas.classList.remove('grab', 'grabbing');
-                    updateStatus();
-                }
-            }
-
-            function handleWheel(e) {
-                if (!image) return;
-                e.preventDefault();
-                const zoomFactor = 1.1;
-                const mousePos = getMousePos(e);
-                
-                const oldScale = transform.scale;
-                transform.scale *= e.deltaY < 0 ? zoomFactor : 1 / zoomFactor;
-
-                transform.panX = mousePos.x - (mousePos.x - transform.panX) * (transform.scale / oldScale);
-                transform.panY = mousePos.y - (mousePos.y - transform.panY) * (transform.scale / oldScale);
-
-                redrawCanvas();
-            }
-
-            function handleMouseDown(e) {
-                if (!image) return;
-                const mousePos = getMousePos(e);
-
-                if (isPanning) {
-                    canvas.classList.add('grabbing');
-                    canvas.classList.remove('grab');
-                    panStart = { x: mousePos.x - transform.panX, y: mousePos.y - transform.panY };
-                    return;
-                }
-                
-                const imagePos = screenToImageCoords(mousePos);
-
-                if (currentMode === 'editing') {
-                    const hit = getHit(imagePos);
-                    if (hit) {
-                        selectedLine = hit.line;
-                        selectedHandle = hit.handle;
-                        isDragging = true;
-                    } else {
-                        selectedLine = null;
-                        selectedHandle = null;
-                    }
-                } else if (currentMode === 'setting-home') {
-                    homePosition = imagePos;
-                    updateHomeInputs();
-                    setMode('idle');
-                    updateInfoPanel();
-                } else if (currentMode.startsWith('drawing')) {
-                    isDrawing = true;
-                    currentLineStart = imagePos;
-                }
-                redrawCanvas();
-            }
-
-            function handleMouseMove(e) {
-                if (!image) return;
-                const mousePos = getMousePos(e);
-
-                if (isPanning && panStart) {
-                    transform.panX = mousePos.x - panStart.x;
-                    transform.panY = mousePos.y - panStart.y;
-                    redrawCanvas();
-                    return;
-                }
-
-                const imagePos = screenToImageCoords(mousePos);
-
-                if (isDrawing) {
-                    redrawCanvas(); 
-                    ctx.save();
-                    ctx.setTransform(transform.scale, 0, 0, transform.scale, transform.panX, transform.panY);
-                    const color = currentMode === 'drawing-reference' ? 'rgba(59, 130, 246, 0.7)' : 'rgba(234, 179, 8, 0.7)';
-                    drawLine(currentLineStart, imagePos, color, 2 / transform.scale);
-                    ctx.restore();
-                } else if (isDragging && selectedLine) {
-                    const dx = imagePos.x - (selectedHandle === 'start' ? selectedLine.start.x : (selectedHandle === 'end' ? selectedLine.end.x : getMidpoint(selectedLine.start, selectedLine.end).x));
-                    const dy = imagePos.y - (selectedHandle === 'start' ? selectedLine.start.y : (selectedHandle === 'end' ? selectedLine.end.y : getMidpoint(selectedLine.start, selectedLine.end).y));
-                    
-                    if (selectedHandle === 'start') {
-                        selectedLine.start = { ...imagePos };
-                    } else if (selectedHandle === 'end') {
-                        selectedLine.end = { ...imagePos };
-                    } else if (selectedHandle === 'body') {
-                        selectedLine.start.x += dx; selectedLine.start.y += dy;
-                        selectedLine.end.x += dx; selectedLine.end.y += dy;
-                    }
-                    selectedLine.pixelLength = getDistance(selectedLine.start, selectedLine.end);
-                    if (selectedLine === referenceLine && scale && selectedLine.length > 0) {
-                        scale = referenceLine.length / referenceLine.pixelLength; // Recalculate scale
-                    }
-                    updateInfoPanel();
-                    redrawCanvas();
-                }
-            }
-
-            function handleMouseUp(e) {
-                if (isPanning) {
-                    canvas.classList.remove('grabbing');
-                    canvas.classList.add('grab');
-                    panStart = null;
-                    return;
-                }
-
-                if (isDragging) {
-                    isDragging = false;
-                    selectedHandle = null;
-                }
-                
-                if (!isDrawing) return;
-                isDrawing = false;
-                const lineEnd = screenToImageCoords(getMousePos(e));
-                const pixelLength = getDistance(currentLineStart, lineEnd);
-                if(pixelLength < 2) return;
-
-                if (currentMode === 'drawing-reference') {
-                    referenceLine = { start: currentLineStart, end: lineEnd, pixelLength, length: 0 };
-                    modal.classList.remove('hidden');
-                    modal.classList.add('flex');
-                    referenceLengthInput.focus();
-                } else if (currentMode === 'drawing-measure') {
-                    if (!scale) { alert("Please set a reference scale first."); return; }
-                    measurements.push({ start: currentLineStart, end: lineEnd, pixelLength });
-                    updateInfoPanel();
-                }
-                redrawCanvas();
-            }
-            
-            function handleSetScale() {
-                const length = parseFloat(referenceLengthInput.value);
-                unit = referenceUnitSelect.value;
-                if (!isNaN(length) && length > 0) {
-                    referenceLine.length = length;
-                    scale = (unit === 'pixels') ? 1 : length / referenceLine.pixelLength;
-                    
-                    modal.classList.add('hidden');
-                    modal.classList.remove('flex');
-                    referenceLengthInput.value = '';
-                    
-                    homeXUnitSpan.textContent = `(${unit})`;
-                    homeYUnitSpan.textContent = `(${unit})`;
-                    [homeXInput, homeYInput, setHomeManualBtn].forEach(el => el.disabled = false);
-
-                    updateHomeInputs();
-                    setMode('drawing-measure');
-                    updateInfoPanel();
-                    redrawCanvas();
-                } else {
-                    alert("Please enter a valid positive number.");
-                }
-            }
-
-            function handleSetHomeManually() {
-                const xVal = parseFloat(homeXInput.value);
-                const yVal = parseFloat(homeYInput.value);
-                if(!isNaN(xVal) && !isNaN(yVal) && scale) {
-                    homePosition = { x: xVal / scale, y: yVal / scale };
-                    setMode('idle');
-                    updateInfoPanel();
-                    redrawCanvas();
-                } else {
-                    alert("Please enter valid coordinates and ensure a scale is set.");
-                }
-            }
-
-            function updateHomeInputs() {
-                if (homePosition && scale) {
-                    homeXInput.value = (homePosition.x * scale).toFixed(2);
-                    homeYInput.value = (homePosition.y * scale).toFixed(2);
-                } else {
-                    homeXInput.value = '';
-                    homeYInput.value = '';
-                }
-            }
-            
-            // --- Drawing & Rendering ---
-
-            function redrawCanvas() {
-                ctx.save();
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
-                ctx.setTransform(transform.scale, 0, 0, transform.scale, transform.panX, transform.panY);
-
-                if (image) ctx.drawImage(image, 0, 0);
-
-                const lineWidthScale = 1 / transform.scale;
-                
-                if (referenceLine.start) {
-                    const isSelected = selectedLine === referenceLine;
-                    const color = isSelected ? '#0ea5e9' : '#3b82f6';
-                    const text = referenceLine.length > 0 ? `${referenceLine.length.toFixed(2)} ${unit}` : 'Reference';
-                    drawLine(referenceLine.start, referenceLine.end, color, 3 * lineWidthScale);
-                    drawEndpointsAndText(referenceLine, color, text, isSelected);
-                }
-
-                measurements.forEach(m => {
-                    const isSelected = selectedLine === m;
-                    const length = (m.pixelLength * scale) || 0;
-                    const color = isSelected ? '#f59e0b' : '#ca8a04';
-                    drawLine(m.start, m.end, color, 2 * lineWidthScale);
-                    drawEndpointsAndText(m, color, `${length.toFixed(2)} ${unit}`, isSelected);
-                });
-                
-                if (homePosition) {
-                    drawPoint(homePosition, '#ef4444', 10 * lineWidthScale, true);
-                }
-
-                ctx.restore();
-            }
-            
-            function drawEndpointsAndText(line, color, text, isSelected) {
-                const mid = getMidpoint(line.start, line.end);
-                drawPoint(mid, color, (isSelected ? 6 : 4) / transform.scale);
-                if(line.pixelLength * transform.scale > 50) { // Only draw text if line is long enough on screen
-                    drawText(text, mid.x, mid.y - (10 / transform.scale), color);
-                }
-                if (isSelected && currentMode === 'editing') {
-                    drawPoint(line.start, color, HANDLE_RADIUS / transform.scale);
-                    drawPoint(line.end, color, HANDLE_RADIUS / transform.scale);
-                }
-            }
-            
-            function drawLine(start, end, color, width) {
-                ctx.beginPath(); ctx.moveTo(start.x, start.y); ctx.lineTo(end.x, end.y);
-                ctx.strokeStyle = color; ctx.lineWidth = width; ctx.stroke();
-            }
-
-            function drawPoint(pos, color, radius = 5, isCrosshair = false) {
-                 ctx.strokeStyle = color; ctx.fillStyle = color;
-                 ctx.lineWidth = 2 / transform.scale;
-                 if (isCrosshair) {
-                     ctx.beginPath();
-                     ctx.moveTo(pos.x - radius, pos.y); ctx.lineTo(pos.x + radius, pos.y);
-                     ctx.moveTo(pos.x, pos.y - radius); ctx.lineTo(pos.x, pos.y + radius);
-                     ctx.stroke();
+             // If the deleted layer was active, switch to the new first layer
+             if (deletedLayerWasActive) {
+                 activeLayerId = null; // Force switch
+                 if (layers.length > 0) {
+                     switchLayer(layers[0].id); // Switch to the new first layer
                  } else {
-                    ctx.beginPath(); ctx.arc(pos.x, pos.y, radius, 0, 2 * Math.PI); ctx.fill();
+                     // This case should technically not be reachable due to the initial check,
+                     // but handle it defensively.
+                     clearCanvasAndUI();
+                     renderLayerTabs(); // Show only add button
+                     updateSummaryTable();
+                     updateInstructionText();
                  }
-            }
+             } else {
+                 // If a different layer was deleted, just re-render tabs and table
+                 renderLayerTabs();
+                 updateSummaryTable();
+             }
+             showMessage("Layer deleted.", 2000);
+        }
+        function renameLayer(layerId, newName) { /* ... no changes ... */ const layer = layers.find(l => l.id === layerId); if (layer && newName.trim()) { layer.name = newName.trim(); renderLayerTabs(); updateSummaryTable(); } }
+        function renderLayerTabs() { /* ... no changes ... */ layerTabsContainer.innerHTML = ''; layerTabsContainer.appendChild(addLayerButton); layers.forEach(layer => { const tab = document.createElement('div'); tab.className = 'layer-tab flex items-center'; tab.dataset.layerId = layer.id; tab.classList.toggle('active', layer.id === activeLayerId); const nameSpan = document.createElement('span'); nameSpan.textContent = layer.name; nameSpan.style.cursor = 'pointer'; nameSpan.addEventListener('click', (e) => { if (!e.target.classList.contains('rename-input')) { switchLayer(layer.id); } }); nameSpan.addEventListener('dblclick', () => { nameSpan.style.display = 'none'; input.style.display = 'inline-block'; input.value = layer.name; input.focus(); input.select(); }); const input = document.createElement('input'); input.type = 'text'; input.className = 'rename-input'; input.style.display = 'none'; input.addEventListener('blur', () => { renameLayer(layer.id, input.value); input.style.display = 'none'; nameSpan.style.display = 'inline-block'; }); input.addEventListener('keydown', (e) => { if (e.key === 'Enter') input.blur(); else if (e.key === 'Escape') { input.value = layer.name; input.blur(); } }); const closeBtn = document.createElement('button'); closeBtn.className = 'close-btn'; closeBtn.innerHTML = '&times;'; closeBtn.title = `Delete ${layer.name}`; closeBtn.addEventListener('click', (e) => { e.stopPropagation(); if (confirm(`Are you sure you want to delete layer "${layer.name}"? This cannot be undone.`)) { deleteLayer(layer.id); } }); tab.appendChild(nameSpan); tab.appendChild(input); if (layers.length > 1) { tab.appendChild(closeBtn); } layerTabsContainer.insertBefore(tab, addLayerButton); }); }
+        function updateInstructionText() { /* ... no changes ... */ const layer = getActiveLayer(); if (!layer) { instructionText.textContent = "Add or select a layer to begin."; return; } let baseText = `Layer "${layer.name}": `; if (layer.perimeterPoints.length === 2 && !layer.isScaleDefinedByUser) { baseText += `Enter distance below and click 'Set Scale'. (Cannot draw yet).`; } else if (currentDrawingMode === 'perimeter') { if (layer.perimeterPoints.length === 0) baseText += `PERIMETER MODE - Click empty space for first point.`; else if (layer.perimeterPoints.length === 1 && !layer.isScaleDefinedByUser) baseText += `PERIMETER MODE - Click empty space for second point to define scale.`; else baseText += `PERIMETER MODE - Click empty space to add points, or click & drag points to move.`; } else { if (innerWallStartPoint) baseText += `INNER WALL MODE - Click to set wall end point.`; else baseText += `INNER WALL MODE - Click to set wall start point.`; } if (!layer.backgroundImageUrl) { baseText += " (Optional: Upload/paste/drag BG image.)"; } instructionText.textContent = baseText; }
 
-            function drawText(text, x, y, color) {
-                const scaledFontSize = 14 / transform.scale;
-                ctx.font = `bold ${scaledFontSize}px Inter`;
-                const textWidth = ctx.measureText(text).width;
-                const padding = 4 / transform.scale;
-                
-                ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
-                ctx.fillRect(x - (textWidth/2) - padding, y - (scaledFontSize), textWidth + (padding*2), scaledFontSize + (padding*2));
-                
-                ctx.fillStyle = color; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-                ctx.fillText(text, x, y);
-            }
+        // --- Canvas Resizing ---
+        function resizeCanvas() { /* ... no changes ... */ const containerWidth = canvasContainer.clientWidth; const containerHeight = canvasContainer.clientHeight; const dpr = window.devicePixelRatio || 1; canvas.width = containerWidth * dpr; canvas.height = containerHeight * dpr; ctx.scale(dpr, dpr); canvas.style.width = `${containerWidth}px`; canvas.style.height = `${containerHeight}px`; requestAnimationFrame(draw); }
+        window.addEventListener('resize', resizeCanvas);
+        const resizeObserver = new ResizeObserver(resizeCanvas); resizeObserver.observe(document.querySelector('.controls'));
 
-            // --- Calculations & UI Updates ---
-            
-            function getHit(pos) {
-                const hitRadius = (HANDLE_RADIUS * 1.5) / transform.scale;
-                const allLines = [referenceLine, ...measurements].filter(l => l.start);
-                for (const line of allLines) {
-                    if (getDistance(pos, line.start) < hitRadius) return { line, handle: 'start' };
-                    if (getDistance(pos, line.end) < hitRadius) return { line, handle: 'end' };
+        // --- Unit and Scale Functions ---
+        function getLayerScale(layer) { /* ... no changes ... */ return layer?.scalePixelsPerInch ?? 10.0; }
+        function convertDisplayValueToInches(value, displayUnit) { /* ... no changes ... */ if (isNaN(value)) return 0; switch (displayUnit) { case 'feet': return value * INCHES_PER_FOOT; case 'meters': return value * INCHES_PER_METER; case 'cm': return value * INCHES_PER_CM; case 'feet-inches': showMessage("Using decimal feet for ft-in input.", 3000); return value * INCHES_PER_FOOT; case 'inches': default: return value; } }
+        function convertInchesToDisplayValue(inches, displayUnit) { /* ... no changes ... */ if (isNaN(inches)) return 0; switch (displayUnit) { case 'feet': return inches / INCHES_PER_FOOT; case 'meters': return inches / INCHES_PER_METER; case 'cm': return inches / INCHES_PER_CM; case 'feet-inches': return inches / INCHES_PER_FOOT; case 'inches': default: return inches; } }
+        function convertPixelsToUnit(pixels, displayUnit, layer) { /* ... no changes ... */ const scale = getLayerScale(layer); if (scale === 0) return 0; const inches = pixels / scale; return convertInchesToDisplayValue(inches, displayUnit); }
+        function formatDistance(distanceValue, displayUnit) { /* ... no changes ... */ if (displayUnit === 'feet-inches') { if (typeof distanceValue === 'object' && distanceValue !== null && 'feet' in distanceValue && 'inches' in distanceValue) { const inchesStr = distanceValue.inches >= 0.05 || distanceValue.feet === 0 ? ` ${distanceValue.inches.toFixed(1)}in` : ''; return `${distanceValue.feet}ft${inchesStr}`; } else { return `${(distanceValue).toFixed(2)} ft`; } } else if (typeof distanceValue === 'number') { return `${distanceValue.toFixed(2)} ${getUnitAbbreviation(displayUnit)}`; } return 'N/A'; }
+        function getUnitAbbreviation(displayUnit) { /* ... no changes ... */ switch (displayUnit) { case 'inches': return 'in'; case 'feet': return 'ft'; case 'feet-inches': return 'ft'; case 'meters': return 'm'; case 'cm': return 'cm'; default: return ''; } }
+        function getAreaUnitAbbreviation(displayUnit) { /* ... no changes ... */ switch (displayUnit) { case 'inches': return 'sq in'; case 'feet': return 'sq ft'; case 'feet-inches': return 'sq ft'; case 'meters': return 'sq m'; case 'cm': return 'sq cm'; default: return ''; } }
+        function convertAreaToUnit(pixelArea, displayUnit, layer) { /* ... no changes ... */ const scale = getLayerScale(layer); if (scale === 0) return 0; const squareInches = pixelArea / (scale * scale); const squareFeet = squareInches / (INCHES_PER_FOOT * INCHES_PER_FOOT); switch (displayUnit) { case 'feet': case 'feet-inches': return squareFeet; case 'meters': return squareFeet / (FEET_PER_METER * FEET_PER_METER); case 'cm': return squareInches * (CM_PER_INCH * CM_PER_INCH); case 'inches': default: return squareInches; } }
+        function convertPixelAreaToSqFt(pixelArea, layer) { /* ... no changes ... */ const scale = getLayerScale(layer); if (scale === 0) return 0; const squareInches = pixelArea / (scale * scale); return squareInches / (INCHES_PER_FOOT * INCHES_PER_FOOT); }
+        function convertPixelLengthToFt(pixelLength, layer) { /* ... no changes ... */ const scale = getLayerScale(layer); if (scale === 0) return 0; const inches = pixelLength / scale; return inches / INCHES_PER_FOOT; }
+
+        // --- Drawing Functions ---
+        function drawPoint(x, y, isSelected = false) { /* ... no changes ... */ if (isSelected) { ctx.fillStyle = 'rgba(59, 130, 246, 0.5)'; ctx.beginPath(); ctx.arc(x, y, POINT_RADIUS + 4, 0, Math.PI * 2); ctx.fill(); } ctx.fillStyle = '#3b82f6'; ctx.beginPath(); ctx.arc(x, y, POINT_RADIUS, 0, Math.PI * 2); ctx.fill(); ctx.strokeStyle = 'white'; ctx.lineWidth = 1; ctx.stroke(); }
+        function drawLine(p1, p2, options = {}) { /* ... no changes ... */ const { color = '#ef4444', width = 2.5, dashed = false, dashPattern = [5, 5], shadow = true } = options; ctx.lineWidth = width; ctx.setLineDash(dashed ? dashPattern : []); ctx.strokeStyle = color; if (shadow) { ctx.shadowColor = 'rgba(255, 255, 255, 0.7)'; ctx.shadowBlur = 3; ctx.shadowOffsetX = 0; ctx.shadowOffsetY = 0; } else { ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0; } ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.stroke(); ctx.setLineDash([]); ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0; }
+        function drawTempLinePreview(start, end) { /* ... no changes ... */ const dx = end.x - start.x; const dy = end.y - start.y; const angle = Math.atan2(dy, dx); const length = Math.sqrt(dx * dx + dy * dy); tempLinePreview.style.left = `${start.x}px`; tempLinePreview.style.top = `${start.y}px`; tempLinePreview.style.width = `${length}px`; tempLinePreview.style.transformOrigin = '0 0'; tempLinePreview.style.transform = `rotate(${angle}rad)`; tempLinePreview.style.display = 'block'; }
+        function hideTempLinePreview() { /* ... no changes ... */ tempLinePreview.style.display = 'none'; }
+
+        // --- Calculation Functions ---
+        function calculateDistance(p1, p2) { /* ... no changes ... */ const dx = p2.x - p1.x; const dy = p2.y - p1.y; return Math.sqrt(dx * dx + dy * dy); }
+        function calculatePolygonArea(pts) { /* ... no changes ... */ let area = 0; const n = pts.length; if (n < 3) return 0; for (let i = 0; i < n; i++) { const p1 = pts[i]; const p2 = pts[(i + 1) % n]; area += (p1.x * p2.y - p2.x * p1.y); } return Math.abs(area) / 2; }
+        function calculateTotalWallLengthPixels(layer) { /* ... no changes ... */ let totalLength = 0; if (layer.perimeterPoints.length >= 2) { for (let i = 0; i < layer.perimeterPoints.length; i++) { const p1 = layer.perimeterPoints[i]; const p2 = layer.perimeterPoints[(i + 1) % layer.perimeterPoints.length]; totalLength += calculateDistance(p1, p2); } } layer.innerWalls.forEach(wall => { totalLength += calculateDistance(wall.start, wall.end); }); return totalLength; }
+
+        // --- Background Image Handling ---
+        function setBackgroundImage(imageUrl, showMsg = true) { /* ... no changes ... */ const layer = getActiveLayer(); if (!layer) return; layer.backgroundImageUrl = imageUrl; canvasContainer.style.backgroundImage = imageUrl ? `url(${imageUrl})` : 'none'; canvasContainer.style.backgroundColor = imageUrl ? '#cccccc' : '#f0f9ff'; if (showMsg && imageUrl) showMessage('Background image set for current layer.', 2000); if (showMsg && !imageUrl) showMessage('Background image removed for current layer.', 2000); updateInstructionText(); }
+        function removeBackgroundImage() { /* ... no changes ... */ setBackgroundImage(null); imageUpload.value = null; }
+        function handleImageFile(file) { /* ... no changes ... */ if (file && file.type.startsWith('image/')) { const reader = new FileReader(); reader.onload = (e) => setBackgroundImage(e.target.result); reader.onerror = () => showMessage('Error reading image file.', 3000); reader.readAsDataURL(file); } else { showMessage('Please select/drop a valid image file.', 3000); } }
+
+        // --- Main Drawing Loop (Draws Active Layer) ---
+        function draw() { /* ... no changes ... */ ctx.clearRect(0, 0, canvas.width, canvas.height); const layer = getActiveLayer(); document.querySelectorAll('.distance-label').forEach(label => label.remove()); if (layer) { layer.distanceLabels = []; } else { updateActiveLayerAreaDisplay(); return; } if (layer.perimeterPoints.length === 0 && layer.innerWalls.length === 0) { updateActiveLayerAreaDisplay(); return; } const selectedDisplayUnit = unitSelect.value; const isScalePending = (layer.perimeterPoints.length === 2 && !layer.isScaleDefinedByUser); layer.innerWalls.forEach(wall => { drawLine(wall.start, wall.end, { color: '#6b7280', width: 1.5, dashed: true, dashPattern: [4, 4], shadow: false }); if (layer.isScaleDefinedByUser) { const pixelDist = calculateDistance(wall.start, wall.end); const unitDist = convertPixelsToUnit(pixelDist, selectedDisplayUnit, layer); const formattedDist = formatDistance(unitDist, selectedDisplayUnit); const midX = (wall.start.x + wall.end.x) / 2; const midY = (wall.start.y + wall.end.y) / 2; const angle = Math.atan2(wall.end.y - wall.start.y, wall.end.x - wall.start.x); const offsetX = Math.sin(angle) * 8; const offsetY = -Math.cos(angle) * 8; const label = document.createElement('div'); label.className = 'distance-label'; label.textContent = formattedDist; label.style.left = `${midX + offsetX}px`; label.style.top = `${midY + offsetY}px`; label.style.fontSize = '0.7rem'; label.style.padding = '1px 3px'; canvasContainer.appendChild(label); layer.distanceLabels.push(label); } }); if (layer.perimeterPoints.length >= 2) { for (let i = 0; i < layer.perimeterPoints.length - 1; i++) { const p1 = layer.perimeterPoints[i]; const p2 = layer.perimeterPoints[i + 1]; const isCurrentSegmentFirst = (i === 0); drawLine(p1, p2, { dashed: isCurrentSegmentFirst && isScalePending }); if (layer.isScaleDefinedByUser || !isCurrentSegmentFirst) { const pixelDist = calculateDistance(p1, p2); const unitDist = convertPixelsToUnit(pixelDist, selectedDisplayUnit, layer); const formattedDist = formatDistance(unitDist, selectedDisplayUnit); const midX = (p1.x + p2.x) / 2; const midY = (p1.y + p2.y) / 2; const angle = Math.atan2(p2.y - p1.y, p2.x - p1.x); const offsetX = Math.sin(angle) * 10; const offsetY = -Math.cos(angle) * 10; const label = document.createElement('div'); label.className = 'distance-label'; label.textContent = formattedDist; label.style.left = `${midX + offsetX}px`; label.style.top = `${midY + offsetY}px`; canvasContainer.appendChild(label); layer.distanceLabels.push(label); } } if (layer.perimeterPoints.length >= 3 && layer.isScaleDefinedByUser) { const pLast = layer.perimeterPoints[layer.perimeterPoints.length - 1]; const pFirst = layer.perimeterPoints[0]; drawLine(pLast, pFirst); const pixelDist = calculateDistance(pLast, pFirst); const unitDist = convertPixelsToUnit(pixelDist, selectedDisplayUnit, layer); const formattedDist = formatDistance(unitDist, selectedDisplayUnit); const midX = (pLast.x + pFirst.x) / 2; const midY = (pLast.y + pFirst.y) / 2; const angle = Math.atan2(pFirst.y - pLast.y, pFirst.x - pLast.x); const offsetX = Math.sin(angle) * 10; const offsetY = -Math.cos(angle) * 10; const label = document.createElement('div'); label.className = 'distance-label'; label.textContent = formattedDist; label.style.left = `${midX + offsetX}px`; label.style.top = `${midY + offsetY}px`; canvasContainer.appendChild(label); layer.distanceLabels.push(label); } } if (layer.isScaleDefinedByUser) { layer.floorAreaSqPixels = calculatePolygonArea(layer.perimeterPoints); layer.wallLengthPixels = calculateTotalWallLengthPixels(layer); } else { layer.floorAreaSqPixels = 0; layer.wallLengthPixels = 0; } layer.perimeterPoints.forEach((p, index) => drawPoint(p.x, p.y, index === selectedPointIndex)); updateActiveLayerAreaDisplay(); updateSummaryTable(); }
+        function updateActiveLayerAreaDisplay() { /* ... no changes ... */ const layer = getActiveLayer(); const displayUnit = unitSelect.value; if (layer && layer.isScaleDefinedByUser) { const unitArea = convertAreaToUnit(layer.floorAreaSqPixels, displayUnit, layer); areaOutput.textContent = unitArea.toFixed(2); areaUnit.textContent = getAreaUnitAbbreviation(displayUnit); } else { areaOutput.textContent = '0.00'; areaUnit.textContent = getAreaUnitAbbreviation(displayUnit); } }
+
+        // --- Interaction Event Handlers ---
+        function getEventCoords(event) { /* ... no changes ... */ const rect = canvas.getBoundingClientRect(); let clientX, clientY; if (event.touches && event.touches.length > 0) { clientX = event.touches[0].clientX; clientY = event.touches[0].clientY; } else if (event.clientX !== undefined) { clientX = event.clientX; clientY = event.clientY; } else { return null; } return { x: clientX - rect.left, y: clientY - rect.top }; }
+        function findHitPoint(coords, layer) { /* ... no changes ... */ if (!coords || !layer) return -1; for (let i = layer.perimeterPoints.length - 1; i >= 0; i--) { const point = layer.perimeterPoints[i]; const dist = calculateDistance(coords, point); if (dist <= HIT_RADIUS) { return i; } } return -1; }
+
+        function handleInteractionStart(event) {
+            const layer = getActiveLayer(); if (!layer) return;
+            if (event.type === 'touchstart') { event.preventDefault(); }
+            const coords = getEventCoords(event); if (!coords) return;
+
+            interactionEndedOffCanvas = false; // Reset flag on new interaction start
+
+            // Block if scale definition pending
+            if (layer.perimeterPoints.length === 2 && !layer.isScaleDefinedByUser) { showMessage(`Please define the scale for layer "${layer.name}" first.`, 3500); scaleDefinitionDiv.classList.add('ring-2', 'ring-red-500'); setTimeout(() => scaleDefinitionDiv.classList.remove('ring-2', 'ring-red-500'), 1000); return; }
+
+            if (currentDrawingMode === 'perimeter') {
+                selectedPointIndex = findHitPoint(coords, layer);
+                if (selectedPointIndex !== -1) { // Start dragging perimeter point
+                    isDragging = true; const point = layer.perimeterPoints[selectedPointIndex];
+                    dragOffsetX = coords.x - point.x; dragOffsetY = coords.y - point.y;
+                    canvas.style.cursor = 'grabbing'; requestAnimationFrame(draw);
+                } else { // Not dragging, potential perimeter point add on end
+                    isDragging = false; selectedPointIndex = null; canvas.style.cursor = 'crosshair';
                 }
-                for (const line of allLines) {
-                    if (pointToLineSegmentDistance(pos, line.start, line.end) < hitRadius) return { line, handle: 'body' };
+            } else { // Inner Wall Mode
+                isDragging = false; selectedPointIndex = null;
+                if (!innerWallStartPoint) { // Start drawing an inner wall
+                    innerWallStartPoint = { x: coords.x, y: coords.y };
+                    hideTempLinePreview(); canvas.style.cursor = 'copy'; updateInstructionText();
+                } else { // Ready to finish drawing inner wall (on end event)
+                     canvas.style.cursor = 'crosshair';
                 }
-                return null;
             }
+        }
 
-            function getDistance(p1, p2) {
-                return Math.sqrt(Math.pow(p2.x - p1.x, 2) + Math.pow(p2.y - p1.y, 2));
+        function handleInteractionMove(event) {
+            const layer = getActiveLayer(); if (!layer) return;
+            if (event.type === 'touchmove') { event.preventDefault(); }
+            const coords = getEventCoords(event); if (!coords) return;
+
+            if (isDragging && currentDrawingMode === 'perimeter' && selectedPointIndex !== null) { // Dragging perimeter point
+                layer.perimeterPoints[selectedPointIndex].x = coords.x - dragOffsetX;
+                layer.perimeterPoints[selectedPointIndex].y = coords.y - dragOffsetY;
+                requestAnimationFrame(draw);
+            } else if (currentDrawingMode === 'innerWall' && innerWallStartPoint) { // Previewing inner wall
+                 drawTempLinePreview(innerWallStartPoint, coords);
             }
+        }
 
-            function getMidpoint(p1, p2) {
-                return { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
+        function handleInteractionEnd(event) {
+             // Check if the interaction actually ended off-canvas
+             if (interactionEndedOffCanvas) {
+                 interactionEndedOffCanvas = false; // Reset flag
+                 // If dragging, finalize the drag based on the last known position before leaving
+                 if (isDragging && currentDrawingMode === 'perimeter') {
+                     isDragging = false;
+                     canvas.style.cursor = 'crosshair';
+                     requestAnimationFrame(draw); // Redraw with final position
+                 }
+                 // If drawing an inner wall, cancel it
+                 else if (currentDrawingMode === 'innerWall' && innerWallStartPoint) {
+                     innerWallStartPoint = null;
+                     hideTempLinePreview();
+                     canvas.style.cursor = 'crosshair';
+                     updateInstructionText();
+                     showMessage("Wall drawing cancelled (mouse left canvas).", 2000);
+                 }
+                 return; // Do not add points if interaction ended off-canvas
+             }
+
+
+            const layer = getActiveLayer(); if (!layer) return;
+            const coords = getEventCoords(event); // Get coords for potential point add
+
+            canvas.style.cursor = 'crosshair'; // Reset cursor
+            hideTempLinePreview(); // Hide preview line
+
+            if (isDragging && currentDrawingMode === 'perimeter') { // Finished dragging perimeter point
+                isDragging = false; requestAnimationFrame(draw);
+            } else if (currentDrawingMode === 'perimeter' && !isDragging) { // Add perimeter point
+                 if (!(layer.perimeterPoints.length === 2 && !layer.isScaleDefinedByUser)) {
+                     if (coords) { // Ensure coords are valid (click happened on canvas)
+                        layer.perimeterPoints.push({ x: coords.x, y: coords.y });
+                        lastAction = 'addPerimeter'; // Track action
+                        // Handle scale definition trigger
+                        if (layer.perimeterPoints.length === 2 && !layer.isScaleDefinedByUser) {
+                            layer.pixelDistanceFirstSegment = calculateDistance(layer.perimeterPoints[0], layer.perimeterPoints[1]);
+                            scaleDefinitionDiv.classList.remove('hidden'); distanceInputUnit.textContent = getUnitAbbreviation(unitSelect.value);
+                            distanceInput.value = ''; distanceInput.focus(); scaleInput.readOnly = true;
+                            scaleInput.classList.add('cursor-not-allowed', 'bg-gray-200');
+                            showMessage(`Define the length of the yellow dashed line for layer "${layer.name}".`, 4000);
+                        }
+                        updateInstructionText(); requestAnimationFrame(draw);
+                    }
+                 }
+            } else if (currentDrawingMode === 'innerWall') { // Finish drawing inner wall
+                 if (innerWallStartPoint && coords) { // Ensure coords are valid
+                     // Avoid adding zero-length walls
+                     if (calculateDistance(innerWallStartPoint, coords) > 1) {
+                         layer.innerWalls.push({ start: innerWallStartPoint, end: { x: coords.x, y: coords.y } });
+                         lastAction = 'addWall'; // Track action
+                         requestAnimationFrame(draw);
+                     }
+                 }
+                 innerWallStartPoint = null; // Reset for next wall
+                 updateInstructionText();
             }
+        }
 
-            function pointToLineSegmentDistance(p, v, w) {
-                const l2 = getDistance(v, w) ** 2; if (l2 === 0) return getDistance(p, v);
-                let t = ((p.x - v.x) * (w.x - v.x) + (p.y - v.y) * (w.y - v.y)) / l2;
-                t = Math.max(0, Math.min(1, t));
-                return getDistance(p, { x: v.x + t * (w.x - v.x), y: v.y + t * (w.y - v.y) });
-            }
-            
-            function getRelativeCoords(point) {
-                if (!homePosition || !scale) return { x: 'N/A', y: 'N/A' };
-                return {
-                    x: ((point.x - homePosition.x) * scale).toFixed(2),
-                    y: ((homePosition.y - point.y) * scale).toFixed(2), // Invert Y
-                };
-            }
+         // Specific handler for mouse leaving the canvas
+         function handleMouseLeave(event) {
+             if (isDragging || innerWallStartPoint) {
+                 interactionEndedOffCanvas = true; // Set flag
+                 handleInteractionEnd(event); // Call the end handler to clean up state
+             }
+         }
 
-            function updateInfoPanel() {
-                measurementsContainer.innerHTML = '';
-                const homeInfo = homePosition ? `(Home: ${(homePosition.x * (scale||1)).toFixed(0)}, ${(homePosition.y * (scale||1)).toFixed(0)} ${unit})` : '(Home not set)';
-                if (referenceLine.length > 0) {
-                    measurementsContainer.innerHTML += `
-                        <div class="bg-blue-50 p-3 rounded-lg border border-blue-200">
-                           <h3 class="font-bold text-blue-800">Reference Scale ${homeInfo}</h3>
-                           <p class="text-sm text-blue-700"><b>Length:</b> ${referenceLine.length.toFixed(2)} ${unit}</p>
-                        </div>`;
-                }
-                measurements.forEach((m, index) => {
-                    const length = m.pixelLength * (scale || 0);
-                    const mid = getMidpoint(m.start, m.end);
-                    const startRel = getRelativeCoords(m.start);
-                    const midRel = getRelativeCoords(mid);
-                    const endRel = getRelativeCoords(m.end);
-                    measurementsContainer.innerHTML += `
-                        <div class="bg-yellow-50 p-3 rounded-lg border border-yellow-200">
-                            <h3 class="font-bold text-yellow-800">Measurement #${index + 1}</h3>
-                            <p class="text-sm text-yellow-700"><b>Length:</b> ${length.toFixed(2)} ${unit}</p>
-                            <div class="mt-2 text-xs text-yellow-600 grid grid-cols-3 gap-1 text-center">
-                                <div><b>Start</b><br>X:${startRel.x}<br>Y:${startRel.y}</div>
-                                <div><b>Mid</b><br>X:${midRel.x}<br>Y:${midRel.y}</div>
-                                <div><b>End</b><br>X:${endRel.x}<br>Y:${endRel.y}</div>
-                            </div>
-                        </div>`;
-                });
-            }
 
-            function saveResults() {
-                const data = {
-                    unit, scale, homePosition,
-                    referenceLine: referenceLine.start ? referenceLine : null,
-                    measurements
-                };
-                const dataStr = JSON.stringify(data, null, 2);
-                const blob = new Blob([dataStr], {type: "application/json"});
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = 'image-measurements.json';
-                a.click();
-                URL.revokeObjectURL(url);
-            }
+        function handleUndoAction() { /* ... no changes ... */ const layer = getActiveLayer(); if (!layer) { showMessage("No active layer to undo actions on.", 2000); return; } if (lastAction === 'addPerimeter' && layer.perimeterPoints.length > 0) { const wasScalePendingOrDefined = layer.isScaleDefinedByUser || (layer.perimeterPoints.length === 2 && !layer.isScaleDefinedByUser); const removingSecondPoint = layer.perimeterPoints.length === 2; layer.perimeterPoints.pop(); if (removingSecondPoint && wasScalePendingOrDefined) { layer.isScaleDefinedByUser = false; layer.scalePixelsPerInch = null; layer.pixelDistanceFirstSegment = 0; scaleDefinitionDiv.classList.add('hidden'); scaleInput.readOnly = false; scaleInput.classList.remove('cursor-not-allowed', 'bg-gray-200'); scaleInput.value = '10'; showMessage("Scale definition reset as second point was removed.", 3000); } if (selectedPointIndex !== null && selectedPointIndex >= layer.perimeterPoints.length) { selectedPointIndex = null; } showMessage("Last perimeter point removed.", 1500); lastAction = null; updateInstructionText(); requestAnimationFrame(draw); } else if (lastAction === 'addWall' && layer.innerWalls.length > 0) { layer.innerWalls.pop(); showMessage("Last inner wall removed.", 1500); lastAction = null; updateInstructionText(); requestAnimationFrame(draw); } else { showMessage("Nothing to undo.", 1500); } }
+        function handleSetScale() { /* ... no changes ... */ const layer = getActiveLayer(); if (!layer || layer.perimeterPoints.length < 2) return; const realDistance = parseFloat(distanceInput.value); const scaleDefinitionUnit = unitSelect.value; if (!realDistance || realDistance <= 0) { showMessage("Please enter a valid positive distance.", 3000); return; } if (layer.pixelDistanceFirstSegment <= 0) { showMessage("Cannot set scale. Invalid first segment drawn.", 3000); return; } const realDistanceInInches = convertDisplayValueToInches(realDistance, scaleDefinitionUnit); if (realDistanceInInches <= 0) { showMessage("Cannot calculate scale with the entered value or unit.", 3000); return; } layer.scalePixelsPerInch = layer.pixelDistanceFirstSegment / realDistanceInInches; layer.isScaleDefinedByUser = true; scaleInput.value = layer.scalePixelsPerInch.toFixed(4); scaleInput.readOnly = true; scaleInput.classList.add('cursor-not-allowed', 'bg-gray-200'); scaleDefinitionDiv.classList.add('hidden'); showMessage(`Scale set for layer "${layer.name}". You can now add more points.`, 3500); updateInstructionText(); requestAnimationFrame(draw); }
+        function clearActiveLayer() { /* ... no changes ... */ const layer = getActiveLayer(); if (!layer) { showMessage("No active layer to clear.", 2000); return; } if (!confirm(`Are you sure you want to clear all points, walls, scale, and background for layer "${layer.name}"?`)) { return; } layer.distanceLabels.forEach(label => label.remove()); layer.perimeterPoints = []; layer.innerWalls = []; layer.backgroundImageUrl = null; layer.scalePixelsPerInch = null; layer.isScaleDefinedByUser = false; layer.pixelDistanceFirstSegment = 0; layer.floorAreaSqPixels = 0; layer.wallLengthPixels = 0; layer.distanceLabels = []; layer.ceilingHeightInches = 8 * INCHES_PER_FOOT; isDragging = false; selectedPointIndex = null; innerWallStartPoint = null; lastAction = null; canvas.style.cursor = 'crosshair'; scaleInput.value = '10'; scaleInput.readOnly = false; scaleInput.classList.remove('cursor-not-allowed', 'bg-gray-200'); scaleDefinitionDiv.classList.add('hidden'); setBackgroundImage(null, false); imageUpload.value = null; updateCeilingHeightInput(); updateActiveLayerAreaDisplay(); updateSummaryTable(); updateInstructionText(); showMessage(`Layer "${layer.name}" cleared.`, 2000); requestAnimationFrame(draw); }
+        function resetAll() { /* ... no changes ... */ if (!confirm("Are you sure you want to reset all layers, points, scales, and backgrounds? This cannot be undone.")) { return; } document.querySelectorAll('.distance-label').forEach(label => label.remove()); layers = []; activeLayerId = null; nextLayerId = 1; isDragging = false; selectedPointIndex = null; innerWallStartPoint = null; lastAction = null; canvas.style.cursor = 'crosshair'; clearCanvasAndUI(); renderLayerTabs(); updateSummaryTable(); addLayer(true); showMessage("All layers reset.", 2500); updateInstructionText(); requestAnimationFrame(draw); }
+        function clearCanvasAndUI() { /* ... no changes ... */ ctx.clearRect(0, 0, canvas.width, canvas.height); setBackgroundImage(null, false); scaleInput.value = '10'; scaleInput.readOnly = false; scaleInput.classList.remove('cursor-not-allowed', 'bg-gray-200'); scaleDefinitionDiv.classList.add('hidden'); imageUpload.value = null; updateActiveLayerAreaDisplay(); updateCeilingHeightInput(); }
 
-            function resetAll(soft = false) {
-                if (!soft) image = null;
-                scale = null;
-                unit = 'pixels';
-                homeXUnitSpan.textContent = `(${unit})`;
-                homeYUnitSpan.textContent = `(${unit})`;
-                referenceLine = { start: null, end: null, length: 0, pixelLength: 0 };
-                measurements = [];
-                homePosition = null;
-                currentMode = 'idle';
-                isDrawing = false;
-                selectedLine = null;
-                selectedHandle = null;
-                transform = { scale: 1, panX: 0, panY: 0 };
-                
-                if (!soft) {
-                    dropZone.classList.remove('hidden');
-                    [drawMeasureBtn, setHomeBtn, editLinesBtn, setHomeManualBtn, homeXInput, homeYInput].forEach(b => b.disabled = true);
-                }
+        // --- Ceiling Height Handling ---
+        function updateCeilingHeightInput() { /* ... no changes ... */ const layer = getActiveLayer(); const displayUnit = unitSelect.value; if (layer) { const displayHeight = convertInchesToDisplayValue(layer.ceilingHeightInches, displayUnit); ceilingHeightInput.value = displayHeight.toFixed(1); } else { ceilingHeightInput.value = convertInchesToDisplayValue(8 * INCHES_PER_FOOT, displayUnit).toFixed(1); } ceilingHeightUnit.textContent = getUnitAbbreviation(displayUnit); }
+        function handleCeilingHeightChange() { /* ... no changes ... */ const layer = getActiveLayer(); if (!layer) return; const displayUnit = unitSelect.value; const heightValue = parseFloat(ceilingHeightInput.value); if (!isNaN(heightValue) && heightValue >= 0) { layer.ceilingHeightInches = convertDisplayValueToInches(heightValue, displayUnit); updateSummaryTable(); } else { updateCeilingHeightInput(); showMessage("Invalid ceiling height entered.", 2000); } }
 
-                updateButtonStyles();
-                updateStatus();
-                updateInfoPanel();
-                updateHomeInputs();
-                redrawCanvas();
-            }
+        // --- Paste Image Handler ---
+        window.addEventListener('paste', (event) => { /* ... no changes ... */ const layer = getActiveLayer(); if (!layer) return; const items = event.clipboardData?.items; if (!items) return; for (let i = 0; i < items.length; i++) { if (items[i].type.indexOf('image') !== -1) { const blob = items[i].getAsFile(); if (blob) { handleImageFile(blob); event.preventDefault(); showMessage(`Image pasted to layer "${layer.name}".`, 2000); return; } } } });
 
-            // --- Start the app ---
-            init();
-        });
+        // --- Drag and Drop Image Handlers ---
+        canvasContainer.addEventListener('dragover', (event) => { /* ... no changes ... */ event.preventDefault(); event.stopPropagation(); if (getActiveLayer()) { canvasContainer.classList.add('drag-over'); } });
+        canvasContainer.addEventListener('dragleave', (event) => { /* ... no changes ... */ event.preventDefault(); event.stopPropagation(); canvasContainer.classList.remove('drag-over'); });
+        canvasContainer.addEventListener('drop', (event) => { /* ... no changes ... */ event.preventDefault(); event.stopPropagation(); canvasContainer.classList.remove('drag-over'); const layer = getActiveLayer(); if (!layer) { showMessage("Please select a layer before dropping an image.", 3000); return; } const files = event.dataTransfer?.files; if (files && files.length > 0) { const file = files[0]; if (file.type.startsWith('image/')) { handleImageFile(file); showMessage(`Image dropped onto layer "${layer.name}".`, 2000); } else { showMessage("Dropped file is not a valid image.", 3000); } } });
+
+        // --- Summary Table Update ---
+        function updateSummaryTable() { /* ... no changes ... */ summaryTableBody.innerHTML = ''; let totalFloorSqFt = 0; let totalWallSqFt = 0; layers.forEach(layer => { const row = summaryTableBody.insertRow(); const nameCell = row.insertCell(); const floorAreaCell = row.insertCell(); const wallAreaCell = row.insertCell(); nameCell.textContent = layer.name; floorAreaCell.classList.add('area-col'); wallAreaCell.classList.add('area-col'); let floorSqFt = 0; let wallSqFt = 0; if (layer.isScaleDefinedByUser) { if (layer.floorAreaSqPixels > 0) { floorSqFt = convertPixelAreaToSqFt(layer.floorAreaSqPixels, layer); floorAreaCell.textContent = floorSqFt.toFixed(2); } else { floorAreaCell.textContent = '0.00'; } if (layer.wallLengthPixels > 0 && layer.ceilingHeightInches > 0) { const totalWallLengthFt = convertPixelLengthToFt(layer.wallLengthPixels, layer); const ceilingHeightFt = layer.ceilingHeightInches / INCHES_PER_FOOT; wallSqFt = totalWallLengthFt * ceilingHeightFt; wallAreaCell.textContent = wallSqFt.toFixed(2); } else { wallAreaCell.textContent = '0.00'; } } else { floorAreaCell.textContent = '0.00'; wallAreaCell.textContent = '0.00'; } totalFloorSqFt += floorSqFt; totalWallSqFt += wallSqFt; }); totalFloorAreaOutput.textContent = `${totalFloorSqFt.toFixed(2)} sq ft`; totalWallAreaOutput.textContent = `${totalWallSqFt.toFixed(2)} sq ft`; }
+
+        // --- Event Listeners ---
+        canvas.addEventListener('mousedown', handleInteractionStart);
+        canvas.addEventListener('mousemove', handleInteractionMove);
+        canvas.addEventListener('mouseup', handleInteractionEnd);
+        canvas.addEventListener('mouseleave', handleMouseLeave); // Use specific handler for mouseleave
+        canvas.addEventListener('touchstart', handleInteractionStart, { passive: false });
+        canvas.addEventListener('touchmove', handleInteractionMove, { passive: false });
+        canvas.addEventListener('touchend', handleInteractionEnd);
+        canvas.addEventListener('touchcancel', handleInteractionEnd); // Treat cancel like end
+        addLayerButton.addEventListener('click', () => addLayer(true));
+        undoActionButton.addEventListener('click', handleUndoAction);
+        clearLayerButton.addEventListener('click', clearActiveLayer);
+        resetAllButton.addEventListener('click', resetAll);
+        setScaleButton.addEventListener('click', handleSetScale);
+        removeBgButton.addEventListener('click', removeBackgroundImage);
+        unitSelect.addEventListener('change', () => { /* ... no changes ... */ const layer = getActiveLayer(); if (layer && layer.perimeterPoints.length === 2 && !layer.isScaleDefinedByUser) { distanceInputUnit.textContent = getUnitAbbreviation(unitSelect.value); } updateCeilingHeightInput(); updateActiveLayerAreaDisplay(); requestAnimationFrame(draw); });
+        scaleInput.addEventListener('input', () => { /* ... no changes ... */ const layer = getActiveLayer(); if (layer && !layer.isScaleDefinedByUser) { const manualScale = parseFloat(scaleInput.value); if (!isNaN(manualScale) && manualScale > 0) { layer.scalePixelsPerInch = manualScale; if(layer.points.length > 0) { requestAnimationFrame(draw); } } } else if (layer && layer.isScaleDefinedByUser) { scaleInput.value = layer.scalePixelsPerInch.toFixed(4); showMessage("Scale was set using the first segment and cannot be changed manually for this layer. Clear layer to reset scale.", 4000); } });
+        imageUpload.addEventListener('change', (event) => { /* ... no changes ... */ if (getActiveLayer()) { if (event.target.files && event.target.files[0]) { handleImageFile(event.target.files[0]); } } else { showMessage("Please select a layer before uploading an image.", 3000); imageUpload.value = null; } });
+        ceilingHeightInput.addEventListener('change', handleCeilingHeightChange);
+        drawingModeRadios.forEach(radio => { /* ... no changes ... */ radio.addEventListener('change', (event) => { currentDrawingMode = event.target.value; innerWallStartPoint = null; hideTempLinePreview(); canvas.style.cursor = 'crosshair'; updateInstructionText(); }); });
+
+        // --- Initial Setup ---
+        document.addEventListener('DOMContentLoaded', () => { /* ... no changes ... */ addLayer(true); setTimeout(resizeCanvas, 100); });
+
     </script>
+
 </body>
 </html>
-
